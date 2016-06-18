@@ -2,4 +2,5 @@ name = Klaviyo
 description = Klaviyo service integration.
 package = Klaviyo
 core = 7.x
+dependencies[] = entity
 dependencies[] = select_or_other

@@ -4,34 +4,175 @@
  * @file
  */
 
+require_once DRUPAL_ROOT . '/sites/all/libraries/klaviyo-api-php/vendor/autoload.php';
+
+function klaviyo_get_api() {
+  return Klaviyo\KlaviyoApi::create(variable_get('klaviyo_api_key', ''));
+}
+
+function klaviyo_get_model_class_mapper() {
+  return array(
+    'person' => Klaviyo\Model\PersonModel::class,
+    'empty' => Klaviyo\Model\EmptyModel::class,
+  );
+}
+
+function klaviyo_get_list_manager() {
+  $api = klaviyo_get_api();
+  return Klaviyo\ListManager::create($api);
+}
+
+function klaviyo_get_model_class($model) {
+  $mapper = klaviyo_get_model_class_mapper();
+  return !empty($mapper[$model]) ? $mapper[$model] : $mapper['empty'];
+}
+
+function klaviyo_get_model_person_mappable_keys() {
+  $model_class = klaviyo_get_model_class('person');
+  return array_filter(call_user_func("$model_class::getAttributeKeys"), function($attribute_key) {
+    return !($attribute_key === 'id' || $attribute_key === 'object');
+  });
+}
+
+function klaviyo_create_model($model, $configuration) {
+  $model_class = klaviyo_get_model_class($model);
+  return call_user_func("$model_class::create", $configuration);
+}
+
+function klaviyo_is_person_attribute_special($attribute_key) {
+  $model_class = klaviyo_get_model_class('person');
+  return call_user_func("$model_class::isSpecialAttributeKey", $attribute_key);
+}
+
+function klaviyo_get_person_attribute_map_options($field_name, $default_attribute = '') {
+  $attributes = variable_get('klaviyo_person_attributes_user', array());
+
+  if (isset($attributes[$field_name])) {
+    $default_attribute = $attributes[$field_name];
+  }
+
+  $attributes = array_diff(drupal_map_assoc(klaviyo_get_model_person_mappable_keys()), $attributes);
+  if (!empty($default_attribute)) {
+    $attributes[$default_attribute] = $default_attribute;
+  }
+
+  return $attributes;
+}
+
+function klaviyo_is_field_mappable($entity_type, $bundle, $field_type) {
+  $allowable_field_types = array('text', 'list_text');
+
+  return ($entity_type === 'user' && $bundle === 'user' && in_array($field_type, $allowable_field_types));
+}
+
+function klaviyo_is_field_mapped($entity_type, $bundle, $field_name) {
+  $is_mapped = FALSE;
+
+  if ($entity_type === 'user' && $bundle === 'user') {
+    $attributes = variable_get('klaviyo_person_attributes_user', array());
+    $is_mapped = !empty($attributes[$field_name]);
+  }
+
+  return $is_mapped;
+}
+
 /**
  * Implements hook_form_FORM_ID_alter().
  */
 function klaviyo_form_field_ui_field_edit_form_alter(&$form, $form_state, $form_id) {
-  $is_user_entity = (!empty($form['instance']['entity_type']['#value']) && $form['instance']['entity_type']['#value'] === 'user');
+  $api = klaviyo_get_api();
 
-  if ($is_user_entity && $form['#field']['type'] === 'text') {
+  $entity_type = !empty($form['instance']['entity_type']['#value']) ? $form['instance']['entity_type']['#value'] : '';
+  $bundle = !empty($form['instance']['bundle']['#value']) ? $form['instance']['bundle']['#value'] : '';
+  if (klaviyo_is_field_mappable($entity_type, $bundle, $form['#field']['type'])) {
     $form['klaviyo'] = array(
      '#type' => 'fieldset',
      '#title' => t('Klaviyo'),
+     '#tree' => TRUE,
     );
+
+    $attributes = variable_get('klaviyo_person_attributes_user', array());
+    $default_value = !empty($attributes[$form['#field']['field_name']]) ? $attributes[$form['#field']['field_name']] : '_none';
     $form['klaviyo']['person_attribute'] = array(
       '#type' => 'select_or_other',
+      '#title' => t('Attribute'),
+      '#other' => t('Custom'),
+      '#default_value' => $default_value,
       '#options' => array(
         '_none' => t('Not used'),
-      ),
+      ) + klaviyo_get_person_attribute_map_options($form['#field']['field_name']),
       '#description' => t('Select the attribute for which this field should map in Klaviyo, if any.'),
     );
+
+    $form['#validate'][] = 'klaviyo_form_field_ui_field_edit_form_validate';
+    $form['#submit'][] = 'klaviyo_form_field_ui_field_edit_form_submit';
+  }
+}
+
+function klaviyo_form_field_ui_field_edit_form_validate(&$form, &$form_state) {
+  $values = $form_state['values'];
+
+  if (!empty($values['klaviyo']['person_attribute']) && $attribute_key = $values['klaviyo']['person_attribute']) {
+    // @todo: Check that it is not already used.
+    // @todo: Check that it is a clean string < 125 chars (or max variable size?).
+  }
+}
+
+function klaviyo_form_field_ui_field_edit_form_submit(&$form, &$form_state) {
+  $values = $form_state['values'];
+
+  if (!empty($values['klaviyo']['person_attribute']) && $attribute_key = $values['klaviyo']['person_attribute']) {
+    $attributes = variable_get('klaviyo_person_attributes_user', array());
+    if ($attribute_key === '_none' && !empty($attributes[$form['#field']['field_name']])) {
+      unset($attributes[$form['#field']['field_name']]);
+    }
+    else {
+      $attributes[$form['#field']['field_name']] = $attribute_key;
+    }
+    variable_set('klaviyo_person_attributes_user', $attributes);
   }
 }
 
 /**
- * Implements hook_field_widget_form_alter().
+ * Implements hook_user_presave().
  */
-/*
-function klaviyo_field_widget_form_alter(&$element, &$form_state, &$context) {
-  if ($context['instance']['entity_type'] === 'user') {
-    dpm($context);
+function klaviyo_user_presave(&$edit, $account, $category) {
+  $person_configuration = array();
+
+  $attributes = variable_get('klaviyo_person_attributes_user', array());
+  $wrapper = entity_metadata_wrapper('user', $account);
+
+  foreach ($attributes as $field_name => $attribute_key) {
+    if (isset($wrapper->{$field_name}) && $field_value = $wrapper->{$field_name}->value()) {
+      $person_configuration[$attribute_key] = $field_value;
+    }
+  }
+
+  if (!empty($person_configuration)) {
+    $person_configuration['$email'] = $account->mail;
+
+    if (empty($person_configuration['$first_name'])) {
+      $person_configuration['$first_name'] = $account->name;
+    }
+
+    // @todo: Maybe we should add this to a queue and allow the user to register
+    //        later.
+    klaviyo_subscribe_user_to_list(variable_get('klaviyo_list', ''), $person_configuration);
   }
 }
-*/
+
+function klaviyo_subscribe_user_to_list($list_id, $person_configuration) {
+  try {
+    $list_manager = klaviyo_get_list_manager();
+    $list = $list_manager->getList($list_id);
+    $person = klaviyo_create_model('person', $person_configuration);
+    $list_manager->addPersonToList($list, $person, FALSE);
+  }
+  catch(Klaviyo\Exception\KlaviyoExceptionInterface $e) {
+    watchdog_exception('klaviyo', $e);
+
+    // @todo: Should we add this to a queue for later for time outs or anything
+    //        similar?
+    //        Should we display a message to the user?
+  }
+}

@@ -1,0 +1,10 @@
+<?php
+
+/**
+ * @file
+ */
+
+function klaviyo_uninstall() {
+  variable_del('klaviyo_api_key');
+  variable_del('klaviyo_person_attributes_user');
+}
