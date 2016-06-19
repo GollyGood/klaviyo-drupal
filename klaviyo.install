@@ -6,6 +6,6 @@
 
 function klaviyo_uninstall() {
   variable_del('klaviyo_api_key');
-  variable_del('klaviyo_list');
+  variable_del('klaviyo_drupal_segment');
   variable_del('klaviyo_person_attributes_user');
 }

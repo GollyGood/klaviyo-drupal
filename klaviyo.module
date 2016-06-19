@@ -4,10 +4,22 @@
  * @file
  */
 
+// @todo: Get all this Klaviyo API specific stuff out of here!
 require_once DRUPAL_ROOT . '/sites/all/libraries/klaviyo-api-php/vendor/autoload.php';
 
-function klaviyo_get_api() {
-  return Klaviyo\KlaviyoApi::create(variable_get('klaviyo_api_key', ''));
+function klaviyo_get_drupal_site_id() {
+  $site_id = variable_get('klaviyo_drupal_site_id', '');
+
+  if (empty($site_id)) {
+    $site_id = base64_encode(variable_get('site_name') . ':' . REQUEST_TIME);
+    variable_set('klaviyo_drupal_site_id', $site_id);
+  }
+
+  return $site_id;
+}
+
+function klaviyo_get_instance() {
+  return Klaviyo\KlaviyoServiceContainer::create(variable_get('klaviyo_api_key', ''));
 }
 
 function klaviyo_get_model_class_mapper() {
@@ -15,11 +27,6 @@ function klaviyo_get_model_class_mapper() {
     'person' => Klaviyo\Model\PersonModel::class,
     'empty' => Klaviyo\Model\EmptyModel::class,
   );
-}
-
-function klaviyo_get_list_manager() {
-  $api = klaviyo_get_api();
-  return Klaviyo\ListManager::create($api);
 }
 
 function klaviyo_get_model_class($model) {
@@ -80,8 +87,6 @@ function klaviyo_is_field_mapped($entity_type, $bundle, $field_name) {
  * Implements hook_form_FORM_ID_alter().
  */
 function klaviyo_form_field_ui_field_edit_form_alter(&$form, $form_state, $form_id) {
-  $api = klaviyo_get_api();
-
   $entity_type = !empty($form['instance']['entity_type']['#value']) ? $form['instance']['entity_type']['#value'] : '';
   $bundle = !empty($form['instance']['bundle']['#value']) ? $form['instance']['bundle']['#value'] : '';
   if (klaviyo_is_field_mappable($entity_type, $bundle, $form['#field']['type'])) {
@@ -134,13 +139,24 @@ function klaviyo_form_field_ui_field_edit_form_submit(&$form, &$form_state) {
 }
 
 /**
- * Implements hook_user_presave().
+ * Implements hook_user_insert().
  */
-function klaviyo_user_presave(&$edit, $account, $category) {
+function klaviyo_user_insert(&$edit, $account, $category) {
+  klaviyo_write_person_record('user', $account);
+}
+
+/**
+ * Implements hook_user_update().
+ */
+function klaviyo_user_update(&$edit, $account, $category) {
+  klaviyo_write_person_record('user', $account);
+}
+
+function klaviyo_write_person_record($entity_type, $account) {
   $person_configuration = array();
 
-  $attributes = variable_get('klaviyo_person_attributes_user', array());
-  $wrapper = entity_metadata_wrapper('user', $account);
+  $attributes = variable_get('klaviyo_person_attributes_' . $entity_type, array());
+  $wrapper = entity_metadata_wrapper($entity_type, $account);
 
   foreach ($attributes as $field_name => $attribute_key) {
     if (isset($wrapper->{$field_name}) && $field_value = $wrapper->{$field_name}->value()) {
@@ -149,24 +165,25 @@ function klaviyo_user_presave(&$edit, $account, $category) {
   }
 
   if (!empty($person_configuration)) {
+    $person_configuration['drupal_site_id'] = klaviyo_get_drupal_site_id();
+    $person_configuration['drupal_uid'] = $account->uid;
     $person_configuration['$email'] = $account->mail;
 
     if (empty($person_configuration['$first_name'])) {
       $person_configuration['$first_name'] = $account->name;
     }
 
-    // @todo: Maybe we should add this to a queue and allow the user to register
-    //        later.
-    klaviyo_subscribe_user_to_list(variable_get('klaviyo_list', ''), $person_configuration);
+    klaviyo_register_person($person_configuration);
   }
 }
 
-function klaviyo_subscribe_user_to_list($list_id, $person_configuration) {
+// @todo: Maybe we should add this to a queue and allow the user to register
+//        later.
+function klaviyo_register_person($person_configuration) {
   try {
-    $list_manager = klaviyo_get_list_manager();
-    $list = $list_manager->getList($list_id);
-    $person = klaviyo_create_model('person', $person_configuration);
-    $list_manager->addPersonToList($list, $person, FALSE);
+    $klaviyo = klaviyo_get_instance();
+    $person = $klaviyo->model($person_configuration, 'person');
+    $klaviyo->service('track')->identify($person);
   }
   catch(Klaviyo\Exception\KlaviyoExceptionInterface $e) {
     watchdog_exception('klaviyo', $e);
