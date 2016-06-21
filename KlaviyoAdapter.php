@@ -25,6 +25,7 @@ class KlaviyoAdapter {
   }
 
   public function getSiteId() {
+    // @todo: Actually try recieving from variables before re-setting it.
     if (empty($this->siteId)) {
       $this->siteId = base64_encode(variable_get('site_name') . ':' . REQUEST_TIME);
       variable_set('klaviyo_drupal_site_id', $this->siteId);
