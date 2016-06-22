@@ -128,7 +128,7 @@ class KlaviyoAdapter {
 
     foreach ($attributes as $field_name => $attribute_key) {
       if (isset($wrapper->{$field_name})) {
-        $person_configuration[$attribute_key] = $field_value = $wrapper->{$field_name}->value();
+        $person_configuration[$attribute_key] = $wrapper->{$field_name}->value();
       }
     }
 

@@ -176,8 +176,7 @@ function klaviyo_user_presave(&$edit, $account, $category) {
     if (!empty($settings['settings']['list']) && $list_id_full = $settings['settings']['list']) {
       $mail = (!empty($edit['original'])) ? $edit['original']->mail : $account->mail;
       if ($person_list = $klaviyo->lookUpPersonFromList($list_id_full, $mail)) {
-        // @todo: Do we need our own table?
-        $account->klaviyo = $edit['data']['klaviyo'] = array('id' => $person_list->person->id);
+        $edit['data']['klaviyo'] = array('id' => $person_list->person->id);
       }
     }
   }
@@ -187,24 +186,14 @@ function klaviyo_user_presave(&$edit, $account, $category) {
  * Implements hook_user_insert().
  */
 function klaviyo_user_insert(&$edit, $account, $category) {
-  klaviyio_mutate_user($edit, $account, $category);
+  klaviyio_user_mutate($edit, $account, $category);
 }
 
 /**
  * Implements hook_user_update().
  */
 function klaviyo_user_update(&$edit, $account, $category) {
-  klaviyio_mutate_user($edit, $account, $category);
-}
-
-function klaviyio_mutate_user(&$edit, $account, $category) {
-  $klaviyo = KlaviyoAdapter::getInstance();
-
-  if (!$klaviyo->isEnabledOnEntity('user')) {
-    return;
-  }
-
-  klaviyo_write_person_record('user', $account);
+  klaviyio_user_mutate($edit, $account, $category);
 }
 
 // @todo: Maybe we should add this to a queue and allow the user to register
@@ -213,12 +202,17 @@ function klaviyio_mutate_user(&$edit, $account, $category) {
 //        it to look up users for updating email addresses if it changed so we
 //        don't create new persons in Klaviyo for an email change.
 // @todo: Add a way for the users to opt out of Klaviyo tracking.
-function klaviyo_write_person_record($entity_type, $entity) {
+function klaviyio_user_mutate(&$edit, $account, $category) {
   $klaviyo = KlaviyoAdapter::getInstance();
-  $person_configuration = $klaviyo->preparePersonConfiguration($entity_type, $entity);
+
+  if (!$klaviyo->isEnabledOnEntity('user')) {
+    return;
+  }
+
+  $person_configuration = $klaviyo->preparePersonConfiguration('user', $account);
+  $person_configuration += $edit['data']['klaviyo'];
 
   if (!empty($person_configuration)) {
-    $person = NULL;
     try {
       $person = $klaviyo->api->model($person_configuration, 'person');
       $klaviyo->api->service('track')->identify($person);
