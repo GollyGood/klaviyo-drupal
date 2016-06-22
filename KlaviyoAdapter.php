@@ -25,7 +25,8 @@ class KlaviyoAdapter {
   }
 
   public function getSiteId() {
-    // @todo: Actually try recieving from variables before re-setting it.
+    $this->siteId = variable_get('klaviyo_drupal_site_id', '');
+
     if (empty($this->siteId)) {
       $this->siteId = base64_encode(variable_get('site_name') . ':' . REQUEST_TIME);
       variable_set('klaviyo_drupal_site_id', $this->siteId);
@@ -33,7 +34,6 @@ class KlaviyoAdapter {
 
     return $this->siteId;
   }
-
 
   public function getLists() {
     $lists = array();
@@ -108,7 +108,11 @@ class KlaviyoAdapter {
     $person_configuration = array();
 
     $wrapper = entity_metadata_wrapper($entity_type, $entity);
-    $this->preparePersonConfigurationKlaviyoAttributes($entity_type, $wrapper, $person_configuration);
+    $person_configuration = $this->preparePersonConfigurationKlaviyoAttributes($entity_type, $wrapper, $person_configuration);
+
+    if (!empty($entity->klaviyo['id'])) {
+      $person_configuration['id'] = $entity->klaviyo['id'];
+    }
 
     $person_configuration = $this->preparePersonConfigurationDrupalInfo($entity_type, $wrapper, $person_configuration);
 
@@ -198,11 +202,24 @@ class KlaviyoAdapter {
         $this->api->service('lists')->addPersonToList($person, $list);
       }
       catch (Exception $e) {
-        watchdog_error('klaviyo', $e);
+        watchdog_exception('klaviyo', $e);
       }
     }
   }
 
+  public function lookUpPersonFromList($list_full_id, $email) {
+    $lists_service = $this->api->service('lists');
+    try {
+      list(, $list_id) = $this->parseFullListId($list_full_id);
+      $list = $lists_service->getList($list_id);
+      $person_list = $this->api->service('lists')->checkMembersAreInList($list, [$email]);
+    }
+    catch (Exception $e) {
+      watchdog_exception('klaviyo', $e);
+    }
+
+    return reset($person_list);
+  }
 
   public function __clone() {}
   public function __wakeup() {}
