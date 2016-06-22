@@ -7,10 +7,78 @@
 /**
  * Implements hook_form_FORM_ID_alter().
  */
+function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
+  $klaviyo = KlaviyoAdapter::getInstance();
+
+  if ($klaviyo->isCompatiableEntity('user')) {
+    $default_values = $klaviyo->getAllEntitySettings('user');
+
+    $form['klaviyo'] = array(
+     '#type' => 'fieldset',
+     '#title' => t('Klaviyo'),
+     '#tree' => TRUE,
+    );
+    $form['klaviyo']['enabled'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Enable'),
+      '#default_value' => $default_values['enabled'],
+      '#description' => t('Enable Klaviyo mapping for user accounts.'),
+    );
+    $form['klaviyo']['settings'] = array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'class' => array('klaviyo-settings')
+      ),
+      '#states' => array(
+        'visible' => array(
+          ':input[name="klaviyo[enabled]"]' => array('checked' => TRUE)
+        ),
+      ),
+    );
+    $form['klaviyo']['settings']['list'] = array(
+      '#type' => 'select_or_other',
+      '#title' => t('List/Segment'),
+      '#other' => t('Create a new list'),
+      '#default_value' => $default_values['settings']['list'],
+      '#options' => array(
+        '_none' => t('Not used'),
+      ) + $klaviyo->getCachedListOptions(),
+      '#description' => t("Select a list to add all Drupal user accounts. This is used for looking up users so that if a user's email address is changed then we can update the user's Klaviyo person record. <br /> Note: If you select a segment then users will not be added as segments are dynamically generated lists."),
+    );
+
+    $form['#submit'][] = 'klaviyo_form_user_admin_settings_alter_validate';
+    $form['#submit'][] = 'klaviyo_form_user_admin_settings_alter_submit';
+  }
+}
+
+function klaviyo_form_user_admin_settings_alter_validate(&$form, $form_state) {
+  // @todo: 'Some validation...'
+}
+
+function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
+  $values = $form_state['values'];
+
+  if (!empty($values['klaviyo'])) {
+    if (!empty($values['klaviyo']['settings']['list']) && $list_id_full = $values['klaviyo']['settings']['list']) {
+      $klaviyo = KlaviyoAdapter::getInstance();
+
+      list(, $list_id) = $klaviyo->parseFullListId($list_id_full);
+      if (empty($list_id)) {
+        $list = $klaviyo->createList($list_id_full);
+        $values['klaviyo']['settings']['list'] = $klaviyo->createFullListId($list);
+      }
+    }
+
+    variable_set('klaviyo_entity_settings_user', $values['klaviyo']);
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
 function klaviyo_form_field_ui_field_edit_form_alter(&$form, $form_state, $form_id) {
   $entity_type = !empty($form['instance']['entity_type']['#value']) ? $form['instance']['entity_type']['#value'] : '';
-  $bundle = !empty($form['instance']['bundle']['#value']) ? $form['instance']['bundle']['#value'] : '';
-  if (KlaviyoAdapter::getInstance()->isFieldMappable($entity_type, $bundle, $form['#field']['type'])) {
+  if (KlaviyoAdapter::getInstance()->isFieldMappable($entity_type, $form['#field']['type'])) {
     $form['klaviyo'] = array(
      '#type' => 'fieldset',
      '#title' => t('Klaviyo'),
@@ -106,15 +174,27 @@ function klaviyo_user_update(&$edit, $account, $category) {
 // @todo: If we have set a Klaviyo segment for looking up the entity we will use
 //        it to look up users for updating email addresses if it changed so we
 //        don't create new persons in Klaviyo for an email change.
+// @todo: Add a way for the users to opt out of Klaviyo tracking.
 function klaviyo_write_person_record($entity_type, $entity) {
   $klaviyo = KlaviyoAdapter::getInstance();
   $person_configuration = $klaviyo->preparePersonConfiguration($entity_type, $entity);
 
-  try {
-    $person = $klaviyo->api->model($person_configuration, 'person');
-    $klaviyo->api->service('track')->identify($person);
-  }
-  catch(Klaviyo\Exception\KlaviyoExceptionInterface $e) {
-    watchdog_exception('klaviyo', $e);
+  if (!empty($person_configuration)) {
+    $person = NULL;
+    try {
+      $person = $klaviyo->api->model($person_configuration, 'person');
+      $klaviyo->api->service('track')->identify($person);
+    }
+    catch(Klaviyo\Exception\KlaviyoExceptionInterface $e) {
+      watchdog_exception('klaviyo', $e);
+    }
+
+    if (!empty($person) && $settings = $klaviyo->getAllEntitySettings('user')) {
+      if (!empty($settings['list']) && $list_id_full = $settings['list']) {
+        if ($list_type === 'list') {
+          // @todo: Subscribe user to list.
+        }
+      }
+    }
   }
 }
