@@ -168,7 +168,7 @@ class KlaviyoAdapter {
       $variable_name .= $bundle;
     }
 
-    return variable_get($variable_name, array('enabled' => FALSE, 'list' => ''));
+    return variable_get($variable_name, array('enabled' => FALSE, 'settings' => array('list' => '')));
   }
 
   public function isEnabledOnEntity($entity_type, $bundle = '') {
@@ -182,7 +182,7 @@ class KlaviyoAdapter {
 
   public function isFieldMapped($entity_type, $field_type, $bundle = '') {
     $is_mapped = FALSE;
-    $variable_name = "klaviyo_person_attributes__$entity_type";
+    $variable_name = "klaviyo_person_attributes_$entity_type";
 
     if ($bundle) {
       $variable_name .= $bundle;

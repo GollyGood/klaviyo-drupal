@@ -4,8 +4,79 @@
  * @file
  */
 
+/**
+ * hook_schema().
+ */
+function klaviyo_schema() {
+  $schema['klaviyo'] = array(
+    'description' => 'The Klaviyo integration base table.',
+    'fields' => array(
+      'klaviyo_id' => array(
+        'description' => 'The Klaviyo id as provided by Klaivyio.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity_type' => array(
+        'description' => 'The type of the entity which Klaviyo is assocaited.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity_bundle' => array(
+        'description' => 'The bundle of the entity which Klaviyo is assocaited.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity_id' => array(
+        'description' => 'The id of the entity which Klaviyo is assocaited.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp when the Klaviyo record was created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'updated' => array(
+        'description' => 'The Unix timestamp when the Klaivyio was last synced.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'synced' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+        'description' => 'Whether the record has been synced with Klaviyo API. Either to_sync(0) or is_synced(1).',
+      ),
+    ),
+    'indexes' => array(
+      'entity_type' => array('entity_type'),
+      'entity_bundle' => array('entity_bundle'),
+      'entity_id' => array('entity_id'),
+    ),
+    'primary key' => array('klaviyo_id'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
 function klaviyo_uninstall() {
   variable_del('klaviyo_api_key');
+  variable_del('klaviyo_drupal_site_id');
   variable_del('klaviyo_drupal_segment');
+  variable_del('klaviyo_entity_settings_user');
   variable_del('klaviyo_person_attributes_user');
 }
