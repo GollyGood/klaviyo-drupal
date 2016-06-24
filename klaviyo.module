@@ -4,11 +4,13 @@
  * @file
  */
 
+require_once __DIR__ . '/KlaviyoDrupal.php';
+
 /**
  * Implements hook_form_FORM_ID_alter().
  */
 function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
-  $klaviyo = KlaviyoAdapter::getInstance();
+  $klaviyo = KlaviyoDrupal::getInstance();
 
   if ($klaviyo->isCompatiableEntity('user')) {
     $default_values = $klaviyo->getAllEntitySettings('user');
@@ -60,11 +62,11 @@ function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
 
   if (!empty($values['klaviyo'])) {
     if (!empty($values['klaviyo']['settings']['list']) && $list_id_full = $values['klaviyo']['settings']['list']) {
-      $klaviyo = KlaviyoAdapter::getInstance();
+      $klaviyo = KlaviyoDrupal::getInstance();
 
       list(, $list_id) = $klaviyo->parseFullListId($list_id_full);
       if (empty($list_id)) {
-        $list = $klaviyo->createList($list_id_full);
+        $list = $klaviyo->api->createList($list_id_full);
         $values['klaviyo']['settings']['list'] = $klaviyo->createFullListId($list);
       }
     }
@@ -77,8 +79,9 @@ function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
  * Implements hook_form_FORM_ID_alter().
  */
 function klaviyo_form_field_ui_field_edit_form_alter(&$form, $form_state, $form_id) {
+  $klaviyo = KlaviyoDrupal::getInstance();
   $entity_type = !empty($form['instance']['entity_type']['#value']) ? $form['instance']['entity_type']['#value'] : '';
-  if (KlaviyoAdapter::getInstance()->isFieldMappable($entity_type, $form['#field']['type'])) {
+  if ($klaviyo->isFieldMappable($entity_type, $form['#field']['type'])) {
     $form['klaviyo'] = array(
      '#type' => 'fieldset',
      '#title' => t('Klaviyo'),
@@ -94,41 +97,13 @@ function klaviyo_form_field_ui_field_edit_form_alter(&$form, $form_state, $form_
       '#default_value' => $default_value,
       '#options' => array(
         '_none' => t('Not used'),
-      ) + klaviyo_get_person_attribute_map_options($form['#field']['field_name']),
+      ) + $klaviyo->getPersonMappableAttributeOptions('user', $form['#field']['field_name']),
       '#description' => t('Select the attribute for which this field should map in Klaviyo, if any.'),
     );
 
     $form['#validate'][] = 'klaviyo_form_field_ui_field_edit_form_validate';
     $form['#submit'][] = 'klaviyo_form_field_ui_field_edit_form_submit';
   }
-}
-
-/**
- * Retrieve an array of person attribute options for a specific field.
- *
- * @param string $field_name
- *   The field for which to retrieve the field options.
- * @param string $default_attribute
- *   The default attribute to add to the options array.
- *
- * @return array
- *    An array of key => value pair options to be used with a Drupal FAPI field
- *    element.
- */
-function klaviyo_get_person_attribute_map_options($field_name, $default_attribute = '') {
-  $attributes = variable_get('klaviyo_person_attributes_user', array());
-
-  if (isset($attributes[$field_name])) {
-    $default_attribute = $attributes[$field_name];
-  }
-
-  $mappable_attribute_keys = KlaviyoAdapter::getInstance()->getPersonGetMappableKeys();
-  $attributes = array_diff(drupal_map_assoc($mappable_attribute_keys), $attributes);
-  if (!empty($default_attribute)) {
-    $attributes[$default_attribute] = $default_attribute;
-  }
-
-  return $attributes;
 }
 
 function klaviyo_form_field_ui_field_edit_form_validate(&$form, &$form_state) {
@@ -159,7 +134,7 @@ function klaviyo_form_field_ui_field_edit_form_submit(&$form, &$form_state) {
  * Implements hook_user_presave().
  */
 function klaviyo_user_presave(&$edit, $account, $category) {
-  $klaviyo = KlaviyoAdapter::getInstance();
+  $klaviyo = KlaviyoDrupal::getInstance();
 
   if (!$klaviyo->isEnabledOnEntity('user')) {
     return;
@@ -175,7 +150,8 @@ function klaviyo_user_presave(&$edit, $account, $category) {
   elseif (empty($account->klaviyo['id']) && $settings = $klaviyo->getAllEntitySettings('user')) {
     if (!empty($settings['settings']['list']) && $list_id_full = $settings['settings']['list']) {
       $mail = (!empty($edit['original'])) ? $edit['original']->mail : $account->mail;
-      if ($person_list = $klaviyo->lookUpPersonFromList($list_id_full, $mail)) {
+      list(, $list_id) = $klaviyo->parseFullListId($list_id_full);
+      if ($person_list = $klaviyo->api->lookUpPersonFromList($list_id, $mail)) {
         $edit['data']['klaviyo'] = array('id' => $person_list->person->id);
       }
     }
@@ -186,39 +162,12 @@ function klaviyo_user_presave(&$edit, $account, $category) {
  * Implements hook_user_insert().
  */
 function klaviyo_user_insert(&$edit, $account, $category) {
-  klaviyio_user_mutate($edit, $account, $category);
+  KlaviyoDrupal::getInstance()->saveEntity('user', $account, $edit);
 }
 
 /**
  * Implements hook_user_update().
  */
 function klaviyo_user_update(&$edit, $account, $category) {
-  klaviyio_user_mutate($edit, $account, $category);
-}
-
-// @todo: Maybe we should add this to a queue and allow the user to register
-//        later.
-// @todo: If we have set a Klaviyo segment for looking up the entity we will use
-//        it to look up users for updating email addresses if it changed so we
-//        don't create new persons in Klaviyo for an email change.
-// @todo: Add a way for the users to opt out of Klaviyo tracking.
-function klaviyio_user_mutate(&$edit, $account, $category) {
-  $klaviyo = KlaviyoAdapter::getInstance();
-
-  if (!$klaviyo->isEnabledOnEntity('user')) {
-    return;
-  }
-
-  $person_configuration = $klaviyo->preparePersonConfiguration('user', $account);
-  $person_configuration += $edit['data']['klaviyo'];
-
-  if (!empty($person_configuration)) {
-    try {
-      $person = $klaviyo->api->model($person_configuration, 'person');
-      $klaviyo->api->service('track')->identify($person);
-    }
-    catch(Klaviyo\Exception\KlaviyoExceptionInterface $e) {
-      watchdog_exception('klaviyo', $e);
-    }
-  }
+  KlaviyoDrupal::getInstance()->saveEntity('user', $account, $edit);
 }

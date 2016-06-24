@@ -5,41 +5,17 @@ require_once DRUPAL_ROOT . '/sites/all/libraries/klaviyo-api-php/vendor/autoload
 
 class KlaviyoAdapter {
 
-  public $api;
-  public $apiKey;
-  public $siteId;
-  private static $instance;
+  public $klaviyo;
 
-  public static function getInstance() {
-    if (NULL === static::$instance) {
-      static::$instance = new static();
-    }
-
-    return static::$instance;
-  }
-
-  public function __construct() {
-    $this->apiKey = variable_get('klaviyo_api_key', '');
-    $this->getSiteId();
-    $this->api = Klaviyo\KlaviyoFacade::create($this->apiKey);
-  }
-
-  public function getSiteId() {
-    $this->siteId = variable_get('klaviyo_drupal_site_id', '');
-
-    if (empty($this->siteId)) {
-      $this->siteId = base64_encode(variable_get('site_name') . ':' . REQUEST_TIME);
-      variable_set('klaviyo_drupal_site_id', $this->siteId);
-    }
-
-    return $this->siteId;
+  public function __construct($api_key) {
+    $this->klaviyo = Klaviyo\KlaviyoFacade::create($api_key);
   }
 
   public function getLists() {
     $lists = array();
 
     try {
-      $lists = $this->api->service('lists')->getAllLists();
+      $lists = $this->klaviyo->service('lists')->getAllLists();
     }
     catch (Exception $e) {
       watchdog_exception($e);
@@ -52,7 +28,7 @@ class KlaviyoAdapter {
   public function createList($list_name) {
     $list = NULL;
     try {
-      $list = $this->api->service('lists')->createList($list_name);
+      $list = $this->klaviyo->service('lists')->createList($list_name);
 
       cache_clear_all('klaviyo:list_options', 'cache');
     }
@@ -64,142 +40,18 @@ class KlaviyoAdapter {
     return $list;
   }
 
-  public function getCachedListOptions() {
-    $cache = cache_get('klaviyo:list_options');
-
-    $options = array();
-    if ($cache && !empty($cache->data)) {
-      $options = $cache->data;
-    }
-    else {
-      $lists = KlaviyoAdapter::getInstance()->getLists();
-      foreach ($lists as $list) {
-        $options[$list->listType . ':' . $list->id] = check_plain($list->name);
-      }
-      cache_set('klaviyo:list_options', $options, 'cache', CACHE_TEMPORARY);
-    }
-
-    return $options;
-  }
-
-  public function createFullListId($list) {
-    return $list->listType . ':' . $list->id;
-  }
-
-  public function parseFullListId($list_full_id) {
-    $list_options = $this->getCachedListOptions();
-
-    $parsed_list_full_id = array();
-    if (isset($list_options[$list_full_id])) {
-      $parsed_list_full_id = explode(':', $list_full_id);
-    }
-
-    return $parsed_list_full_id + array(0 => '', 1 => '');
-  }
 
   public function getPersonGetMappableKeys() {
-    $model_class = $this->api->getModelClass('person');
+    $model_class = $this->klaviyo->getModelClass('person');
     return array_filter(call_user_func("$model_class::getAttributeKeys"), function($attribute_key) {
       return !($attribute_key === 'id' || $attribute_key === 'object');
     });
   }
 
-  public function preparePersonConfiguration($entity_type, $entity) {
-    $person_configuration = array();
-
-    $wrapper = entity_metadata_wrapper($entity_type, $entity);
-    $person_configuration = $this->preparePersonConfigurationKlaviyoAttributes($entity_type, $wrapper, $person_configuration);
-
-    if (!empty($entity->klaviyo['id'])) {
-      $person_configuration['id'] = $entity->klaviyo['id'];
-    }
-
-    $person_configuration = $this->preparePersonConfigurationDrupalInfo($entity_type, $wrapper, $person_configuration);
-
-    if ($entity_type === 'user') {
-      $person_configuration = $this->preparePersonConfigurationFromAccount($wrapper, $person_configuration);
-    }
-
-    return $person_configuration;
-  }
-
-  private function preparePersonConfigurationKlaviyoAttributes($entity_type, EntityMetadataWrapper $wrapper, &$person_configuration) {
-    $attributes = variable_get('klaviyo_person_attributes_' . $entity_type, array());
-
-    foreach ($attributes as $field_name => $attribute_key) {
-      if (isset($wrapper->{$field_name})) {
-        $person_configuration[$attribute_key] = $wrapper->{$field_name}->value();
-      }
-    }
-
-    return $person_configuration;
-  }
-
-  private function preparePersonConfigurationDrupalInfo($entity_type, EntityMetadataWrapper $wrapper, &$person_configuration) {
-    $person_configuration['drupal.site_id'] = $this->getSiteId();
-    $person_configuration['drupal.entity_type'] = $entity_type;
-    $person_configuration['drupal.entity_bundle'] = $wrapper->getBundle();
-    $person_configuration['drupal.entity_id'] = $wrapper->getIdentifier();
-
-    return $person_configuration;
-  }
-
-  private function preparePersonConfigurationFromAccount(EntityMetadataWrapper $wrapper, &$person_configuration) {
-    if (empty($person_configuration['$email'])) {
-      $person_configuration['$email'] = $wrapper->mail->value();
-    }
-    if (empty($person_configuration['$first_name'])) {
-      $person_configuration['$first_name'] = $wrapper->label();
-    }
-
-    return $person_configuration;
-  }
-
-  public function isFieldMappable($entity_type, $field_type, $bundle = '') {
-    $allowable_field_types = array('text', 'list_text');
-
-    return ($this->isEnabledOnEntity($entity_type, $bundle) && in_array($field_type, $allowable_field_types));
-  }
-
-  public function getAllEntitySettings($entity_type, $bundle = '') {
-    $variable_name = "klaviyo_entity_settings_$entity_type";
-
-    if ($bundle) {
-      $variable_name .= $bundle;
-    }
-
-    return variable_get($variable_name, array('enabled' => FALSE, 'settings' => array('list' => '')));
-  }
-
-  public function isEnabledOnEntity($entity_type, $bundle = '') {
-    $settings = $this->getAllEntitySettings($entity_type, $bundle);
-    return $this->isCompatiableEntity($entity_type, $bundle) && !empty($settings['enabled']);
-  }
-
-  public function isCompatiableEntity($entity_type, $bundle = '') {
-    return $entity_type === 'user';
-  }
-
-  public function isFieldMapped($entity_type, $field_type, $bundle = '') {
-    $is_mapped = FALSE;
-    $variable_name = "klaviyo_person_attributes_$entity_type";
-
-    if ($bundle) {
-      $variable_name .= $bundle;
-    }
-
-    if ($entity_type === 'user') {
-      $attributes = variable_get($variable_name, array());
-      $is_mapped = !empty($attributes[$field_name]);
-    }
-
-    return $is_mapped;
-  }
-
   public function subscribePersonToList(PersonModel $person, ListModel $list) {
     if (!empty($list)) {
       try {
-        $this->api->service('lists')->addPersonToList($person, $list);
+        $this->klaviyo->service('lists')->addPersonToList($person, $list);
       }
       catch (Exception $e) {
         watchdog_exception('klaviyo', $e);
@@ -207,18 +59,27 @@ class KlaviyoAdapter {
     }
   }
 
-  public function lookUpPersonFromList($list_full_id, $email) {
-    $lists_service = $this->api->service('lists');
+  public function lookUpPersonFromList($list_id, $email) {
+    $lists_service = $this->klaviyo->service('lists');
     try {
-      list(, $list_id) = $this->parseFullListId($list_full_id);
       $list = $lists_service->getList($list_id);
-      $person_list = $this->api->service('lists')->checkMembersAreInList($list, [$email]);
+      $person_list = $this->klaviyo->service('lists')->checkMembersAreInList($list, [$email]);
     }
     catch (Exception $e) {
       watchdog_exception('klaviyo', $e);
     }
 
     return reset($person_list);
+  }
+
+  public function savePerson($person_configuration) {
+    try {
+      $person = $this->klaviyo->model($person_configuration, 'person');
+      $this->klaviyo->service('track')->identify($person);
+    }
+    catch(Klaviyo\Exception\KlaviyoExceptionInterface $e) {
+      watchdog_exception('klaviyo', $e);
+    }
   }
 
   public function __clone() {}
