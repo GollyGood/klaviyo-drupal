@@ -5,6 +5,52 @@
  */
 
 /**
+ * Implements hook_cron().
+ */
+function klaviyo_cron() {
+  $limit = variable_get('klaviyo_sync_batch_size', 10);
+  $unsynced_entities = klaviyo_get_unsynced_entities('user', $limit);
+
+  foreach ($unsynced_entities as $entity) {
+    klaviyo_sync_entity('user', $entity);
+  }
+}
+
+/**
+ * Implements hook_user_load().
+ */
+function klaviyo_user_load($users) {
+  $sync_records = klaviyo_sync_record_load('user', array_keys($users));
+
+  foreach ($sync_records as $entity_id => $sync_record) {
+    $users[$entity_id]->klaviyo = $sync_record;
+    $wrapper = entity_metadata_wrapper('user', $users[$entity_id]);
+    $users[$entity_id]->klaviyo['klaviyo_id'] = Klaviyo::getInstance()->getKlaviyoIdentifier('user', $wrapper);
+  }
+}
+
+/**
+ * Implements hook_user_insert().
+ */
+function klaviyo_user_insert(&$edit, $account, $category) {
+  klaviyo_sync_entity('user', $account);
+}
+
+/**
+ * Implements hook_user_update().
+ */
+function klaviyo_user_update(&$edit, $account, $category) {
+  klaviyo_sync_entity('user', $account);
+}
+
+/**
+ * Implements hook_user_delete().
+ */
+function klaviyo_user_delete($account) {
+  klaviyo_sync_record_delete($account->klaviyo);
+}
+
+/**
  * Implements hook_form_FORM_ID_alter().
  */
 function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
@@ -14,16 +60,18 @@ function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
     $default_values = $klaviyo->getAllEntitySettings('user');
 
     $form['klaviyo'] = array(
-     '#type' => 'fieldset',
-     '#title' => t('Klaviyo'),
-     '#tree' => TRUE,
+      '#type' => 'fieldset',
+      '#title' => t('Klaviyo'),
+      '#tree' => TRUE,
     );
+
     $form['klaviyo']['enabled'] = array(
       '#type' => 'checkbox',
       '#title' => t('Enable'),
       '#default_value' => $default_values['enabled'],
       '#description' => t('Enable Klaviyo mapping for user accounts.'),
     );
+
     $form['klaviyo']['settings'] = array(
       '#type' => 'container',
       '#attributes' => array(
@@ -35,6 +83,9 @@ function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
         ),
       ),
     );
+
+    /*
+      @todo: This is not yet fully implemented remove into branch.
     $form['klaviyo']['settings']['list'] = array(
       '#type' => 'select_or_other',
       '#title' => t('List/Segment'),
@@ -43,23 +94,21 @@ function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
       '#options' => array(
         '_none' => t('Not used'),
       ) + $klaviyo->getCachedListOptions(),
-      '#description' => t("Select a list to add all Drupal user accounts. This is used for looking up users so that if a user's email address is changed then we can update the user's Klaviyo person record. <br /> Note: If you select a segment then users will not be added as segments are dynamically generated lists."),
+      '#description' => t("Select a list to add all Drupal user accounts. <br /> Note: If you select a segment then users will not be added as segments are dynamically generated lists."),
+      $form['#submit'][] = 'klaviyo_form_user_admin_settings_alter_validate';
     );
+    */
 
-    $form['#submit'][] = 'klaviyo_form_user_admin_settings_alter_validate';
     $form['#submit'][] = 'klaviyo_form_user_admin_settings_alter_submit';
   }
-}
-
-
-function klaviyo_form_user_admin_settings_alter_validate(&$form, $form_state) {
-  // @todo: 'Some validation...'
 }
 
 function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
   $values = $form_state['values'];
 
   if (!empty($values['klaviyo'])) {
+    /*
+      @todo: This is not yet fully implemented remove into branch.
     if (!empty($values['klaviyo']['settings']['list']) && $list_id_full = $values['klaviyo']['settings']['list']) {
       $klaviyo = Klaviyo::getInstance();
 
@@ -69,6 +118,7 @@ function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
         $values['klaviyo']['settings']['list'] = $klaviyo->createFullListId($list);
       }
     }
+    */
 
     variable_set('klaviyo_entity_settings_user', $values['klaviyo']);
   }
@@ -129,72 +179,27 @@ function klaviyo_form_field_ui_field_edit_form_submit(&$form, &$form_state) {
   }
 }
 
-/**
- * Implements hook_cron().
- */
-function klaviyo_cron() {
-  $limit = variable_get('klaviyo_sync_batch_size', 10);
-  $unsynced_entities = klaviyo_get_unsynced_entities('user', $limit);
-
-  foreach ($unsynced_entities as $entity) {
-    $wrapper = entity_metadata_wrapper('user', $entity);
-    kalviyo_sync_record_save('user', $wrapper);
-  }
-}
-
-/**
- * Implements hook_user_load().
- */
-function klaviyo_user_load($users) {
-  $sync_records = klaviyo_sync_record_load('user', array_keys($users));
-
-  foreach ($sync_records as $entity_id => $sync_record) {
-    $users[$entity_id]->klaviyo = $sync_record;
-  }
-}
-
-/**
- * Implements hook_user_insert().
- */
-function klaviyo_user_insert(&$edit, $account, $category) {
-  klaviyo_user_save($edit, $account, $category);
-}
-
-/**
- * Implements hook_user_update().
- */
-function klaviyo_user_update(&$edit, $account, $category) {
-  klaviyo_user_save($edit, $account, $category);
-}
-
-function klaviyo_user_save(&$edit, $account, $category) {
+function klaviyo_sync_entity($entity_type, $entity) {
   $klaviyo = Klaviyo::getInstance();
 
-  if (!$klaviyo->isEnabledOnEntity('user')) {
-    return;
+  if (!$klaviyo->isEnabledOnEntity($entity_type)) {
+    return FALSE;
   }
 
+  $wrapper = entity_metadata_wrapper($entity_type, $entity);
+  $successful = $klaviyo->saveEntity($entity_type, $wrapper);
 
-  $wrapper = entity_metadata_wrapper('user', $account);
-  $klaviyo->saveEntity('user', $account, $edit);
+  $sync_record = klaviyo_sync_prepare_from_entity($entity_type, $wrapper);
 
-  kalviyo_sync_record_save('user', $wrapper);
-}
-
-function kalviyo_sync_record_save($entity_type, EntityMetadataWrapper $wrapper) {
-  $sync_record = klaviyo_sync_prepare_from_entity('user', $wrapper);
-
-  // Hrmm think this through a good bit more!
-  if (empty($wrapper->value()->klaviyo) || empty($sync_record['klaviyo_id'])) {
-    $mail = (!empty($wrapper->value()->original->mail)) ? $wrapper->value()->original->mail : $wrapper->mail->value();
-    $sync_record['klaviyo_id'] = Klaviyo::getInstance()->lookupKalviyoIdByEmail('user', $mail);
-    $sync_record['klaviyo_id']['synced'] = 1;
-    klaviyo_sync_record_insert($sync_record);
+  if ($successful) {
+    $sync_record['synced'] = 1;
+    $sync_record['updated'] = REQUEST_TIME;
   }
   else {
-    // We really don't have a use for this just yet.
-    klaviyo_sync_record_update($sync_record);
+    $sync_record['synced'] = 0;
   }
+
+  return kalviyo_sync_record_save($sync_record);
 }
 
 function klaviyo_sync_prepare_from_entity($entity_type, EntityMetadataWrapper $wrapper) {
@@ -209,11 +214,32 @@ function klaviyo_sync_prepare_from_entity($entity_type, EntityMetadataWrapper $w
     'entity_bundle' => $wrapper->getBundle(),
     'entity_id' => $wrapper->getIdentifier(),
     'created' => REQUEST_TIME,
-    'klaviyo_id' => 0,
     'synced' => 0,
   );
 
+  // klaviyo_is is a derived value.
+  // @see Klaviyo::getEntityKlaviyoIdentifier().
+  if (isset($sync_record['klaviyo_id'])) {
+    unset($sync_record['klaviyo_id']);
+  }
   return $sync_record;
+}
+
+function kalviyo_sync_record_save($sync_record) {
+  $existing_record = klaviyo_sync_record_load('user', array($sync_record['entity_id']));
+  if (!empty($existing_record) && $existing_record = reset($existing_record)) {
+    $sync_record += $existing_record;
+  }
+
+  $successful = FALSE;
+  if (empty($existing_record)) {
+    $successful = (bool) klaviyo_sync_record_insert($sync_record);
+  }
+  else {
+    $successful = (bool) klaviyo_sync_record_update($sync_record);
+  }
+
+  return !empty($successful) ? $sync_record : array();
 }
 
 function klaviyo_sync_record_load($entity_type, $entity_ids = array()) {
@@ -224,20 +250,6 @@ function klaviyo_sync_record_load($entity_type, $entity_ids = array()) {
   $select->condition('entity_id', $entity_ids, 'IN');
 
   return $select->execute()->fetchAllAssoc('entity_id', PDO::FETCH_ASSOC);
-}
-
-function klaviyo_get_unsynced_entities($entity_type, $limit = 0) {
-  $select = db_select('klaviyo', 'k');
-  $select->fields('k', array('entity_id'));
-
-  $select->condition('entity_type', $entity_type);
-  $select->condition('synced', 0);
-
-  if ($limit) {
-    $select->range(0, $limit);
-  }
-  $entity_ids = array_keys($select->execute()->fetchAllAssoc('entity_id', PDO::FETCH_ASSOC));
-  return user_load_multiple($entity_ids);
 }
 
 function klaviyo_sync_record_insert($sync_record) {
@@ -257,10 +269,13 @@ function klaviyo_sync_record_insert($sync_record) {
 }
 
 function klaviyo_sync_record_update($sync_record) {
+  $count = 0;
+
   try {
     $count = db_update('klaviyo')
       ->fields($sync_record)
-      ->condition('klaviyo_id', $sync_record['klaviyo_id'])
+      ->condition('entity_type', $sync_record['entity_type'])
+      ->condition('entity_id', $sync_record['entity_id'])
       ->execute();
   }
   catch (Exception $e) {
@@ -268,4 +283,25 @@ function klaviyo_sync_record_update($sync_record) {
   }
 
   return $count;
+}
+
+function klaviyo_sync_record_delete($sync_record) {
+  db_delete('klaviyo')
+    ->condition('entity_type', $sync_record['entity_type'])
+    ->condition('entity_id', $sync_record['entity_id'])
+    ->execute();
+}
+
+function klaviyo_get_unsynced_entities($entity_type, $limit = 0) {
+  $select = db_select('klaviyo', 'k');
+  $select->fields('k', array('entity_id'));
+
+  $select->condition('entity_type', $entity_type);
+  $select->condition('synced', 0);
+
+  if ($limit) {
+    $select->range(0, $limit);
+  }
+  $entity_ids = array_keys($select->execute()->fetchAllAssoc('entity_id', PDO::FETCH_ASSOC));
+  return user_load_multiple($entity_ids);
 }

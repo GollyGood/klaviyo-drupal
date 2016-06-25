@@ -68,10 +68,9 @@ class Klaviyo {
     return $options;
   }
 
-  public function preparePersonConfiguration($entity_type, $entity) {
+  public function preparePersonConfiguration($entity_type, EntityMetadataWrapper $wrapper) {
     $person_configuration = array();
 
-    $wrapper = entity_metadata_wrapper($entity_type, $entity);
     $person_configuration = $this->preparePersonConfigurationKlaviyoAttributes($entity_type, $wrapper, $person_configuration);
 
     if (!empty($entity->klaviyo['id'])) {
@@ -92,7 +91,7 @@ class Klaviyo {
 
     foreach ($attributes as $field_name => $attribute_key) {
       if (isset($wrapper->{$field_name}) && $value = $wrapper->{$field_name}->value()) {
-          $person_configuration[$attribute_key] = $value;
+        $person_configuration[$attribute_key] = $value;
       }
       else {
         $person_configuration['$unset'][] = $attribute_key;
@@ -103,12 +102,17 @@ class Klaviyo {
   }
 
   protected function preparePersonConfigurationDrupalInfo($entity_type, EntityMetadataWrapper $wrapper, &$person_configuration) {
+    $person_configuration['id'] = $this->getKlaviyoIdentifier($entity_type, $wrapper);
     $person_configuration['drupal.site_id'] = $this->getSiteId();
     $person_configuration['drupal.entity_type'] = $entity_type;
     $person_configuration['drupal.entity_bundle'] = $wrapper->getBundle();
     $person_configuration['drupal.entity_id'] = $wrapper->getIdentifier();
 
     return $person_configuration;
+  }
+
+  public function getKlaviyoIdentifier($entity_type, EntityMetadataWrapper $wrapper) {
+    return base64_encode($this->getSiteId() . '_' . $entity_type . '_' . $wrapper->getIdentifier());
   }
 
   protected function preparePersonConfigurationFromAccount(EntityMetadataWrapper $wrapper, &$person_configuration) {
@@ -121,7 +125,6 @@ class Klaviyo {
 
     return $person_configuration;
   }
-
 
   public function isEnabledOnEntity($entity_type, $bundle = '') {
     $settings = $this->getAllEntitySettings($entity_type, $bundle);
@@ -164,23 +167,23 @@ class Klaviyo {
     return $is_mapped;
   }
 
-  // @todo: Maybe we should add this to a queue and allow the user to register
-  //        later.
-  // @todo: Add a way for the users to opt out of Klaviyo tracking.
-  public function saveEntity($entity_type, $entity, $edit) {
+  public function saveEntity($entity_type, EntityMetadataWrapper $wrapper) {
     if (!$this->isEnabledOnEntity($entity_type)) {
       return;
     }
 
-    $person_configuration = $this->preparePersonConfiguration($entity_type, $entity);
+    $person_configuration = $this->preparePersonConfiguration($entity_type, $wrapper);
 
-    if (!empty($entity->klaviyo['klaviyo_id'])) {
-      $person_configuration['id'] = $entity->klaviyo['klaviyo_id'];
+    if (!empty($wrapper->value()->klaviyo['klaviyo_id'])) {
+      $person_configuration['id'] = $wrapper->value()->klaviyo['klaviyo_id'];
     }
 
+    $successful = FALSE;
     if (!empty($person_configuration)) {
-      $this->api->savePerson($person_configuration);
+      $successful = $this->api->savePerson($person_configuration);
     }
+
+    return $successful;
   }
 
   public function getPersonMappableAttributeOptions($entity_type, $field_name, $bundle = '') {

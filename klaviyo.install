@@ -11,13 +11,6 @@ function klaviyo_schema() {
   $schema['klaviyo'] = array(
     'description' => 'The Klaviyo integration base table.',
     'fields' => array(
-      'klaviyo_id' => array(
-        'description' => 'The Klaviyo id as provided by Klaivyio.',
-        'type' => 'varchar',
-        'length' => 32,
-        'not null' => TRUE,
-        'default' => '',
-      ),
       'entity_type' => array(
         'description' => 'The type of the entity which Klaviyo is assocaited.',
         'type' => 'varchar',
@@ -61,7 +54,7 @@ function klaviyo_schema() {
     ),
     'indexes' => array(
       'entity_bundle' => array('entity_bundle'),
-      'klaviyo_id' => array('klaviyo_id'),
+      'entity_id' => array('entity_id'),
     ),
     'primary key' => array('entity_type', 'entity_id'),
   );

@@ -18,7 +18,7 @@ class KlaviyoAdapter {
       $lists = $this->klaviyo->service('lists')->getAllLists();
     }
     catch (Exception $e) {
-      watchdog_exception($e);
+      watchdog_exception('klaviyo', $e);
       drupal_set_message('Unable to retrieve lists from Klaviyo. Please try again later.', 'error');
     }
 
@@ -60,8 +60,10 @@ class KlaviyoAdapter {
   }
 
   public function lookUpPersonFromList($list_id, $email) {
-    $lists_service = $this->klaviyo->service('lists');
+    $person_list = array();
+
     try {
+      $lists_service = $this->klaviyo->service('lists');
       $list = $lists_service->getList($list_id);
       $person_list = $this->klaviyo->service('lists')->checkMembersAreInList($list, [$email]);
     }
@@ -73,13 +75,18 @@ class KlaviyoAdapter {
   }
 
   public function savePerson($person_configuration) {
+    $successful = FALSE;
+
     try {
       $person = $this->klaviyo->model($person_configuration, 'person');
       $this->klaviyo->service('track')->identify($person);
+      $successful = TRUE;
     }
-    catch(Klaviyo\Exception\KlaviyoExceptionInterface $e) {
+    catch(Exception $e) {
       watchdog_exception('klaviyo', $e);
     }
+
+    return $successful;
   }
 
   public function __clone() {}
