@@ -3,14 +3,34 @@
 // @todo: Get rid of this ASAP!!!
 require_once DRUPAL_ROOT . '/sites/all/libraries/klaviyo-api-php/vendor/autoload.php';
 
+/**
+ * The Klaviyo API PHP Library adapter for Drupal.
+ */
 class KlaviyoAdapter {
 
+  /**
+   * The Klaviyo API PHP Library facade.
+   *
+   * @var Klaviyo\KlaviyoFacade
+   */
   public $klaviyo;
 
+  /**
+   * Construct a new Klaviyo adapter.
+   *
+   * @param string $api_key
+   *   The Klaviyo API key to use when creating the Klaviyo api service.
+   */
   public function __construct($api_key) {
     $this->klaviyo = Klaviyo\KlaviyoFacade::create($api_key);
   }
 
+  /**
+   * Retrieve all lists.
+   *
+   * @return array $lists
+   *   An array of ListModels that represent all lists and segments present.
+   */
   public function getLists() {
     $lists = array();
 
@@ -25,6 +45,15 @@ class KlaviyoAdapter {
     return $lists;
   }
 
+  /**
+   * Create a new list.
+   *
+   * @param string $list_name
+   *   The name to use for the list.
+   *
+   * @return ListModel
+   *   The ListModel that represents the newly created list.
+   */
   public function createList($list_name) {
     $list = NULL;
     try {
@@ -40,7 +69,13 @@ class KlaviyoAdapter {
     return $list;
   }
 
-
+  /**
+   * Retrieve an array of all mappable attributes for a Klaviyo person record.
+   *
+   * @return array
+   *   An array of all attribute keys that are mappable for a Klaviyo person
+   *   record.
+   */
   public function getPersonGetMappableKeys() {
     $model_class = $this->klaviyo->getModelClass('person');
     return array_filter(call_user_func("$model_class::getAttributeKeys"), function($attribute_key) {
@@ -48,6 +83,16 @@ class KlaviyoAdapter {
     });
   }
 
+  /**
+   * Subscribe a person to an existing list.
+   *
+   * @param PersonModel $person
+   *   The person that should be added to the existing list.
+   * @param ListModel $list
+   *   The list model to which the person should be added.
+   *
+   * @return void
+   */
   public function subscribePersonToList(PersonModel $person, ListModel $list) {
     if (!empty($list)) {
       try {
@@ -59,6 +104,18 @@ class KlaviyoAdapter {
     }
   }
 
+  /**
+   * Look up an individual person from a specified list.
+   *
+   * @param string $list_id
+   *   The id of the list to use when looking up the person.
+   * @param string $email
+   *   The email of the person to lookup.
+   *
+   * @return PersonListModel
+   *   The references of the person that was added and the list to which the
+   *   user was added.
+   */
   public function lookUpPersonFromList($list_id, $email) {
     $person_list = array();
 
@@ -74,6 +131,12 @@ class KlaviyoAdapter {
     return reset($person_list);
   }
 
+  /**
+   * Save the person configuration to Klaviyo.
+   *
+   * @return bool
+   *   Returns TRUE if the person was written to Klaviyo and FALSE otherwise.
+   */
   public function savePerson($person_configuration) {
     $successful = FALSE;
 
@@ -88,8 +151,5 @@ class KlaviyoAdapter {
 
     return $successful;
   }
-
-  public function __clone() {}
-  public function __wakeup() {}
 
 }

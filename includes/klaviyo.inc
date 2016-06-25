@@ -15,6 +15,10 @@ class Klaviyo {
   private $apiKey;
   private $siteId;
 
+  /**
+   * @var Klaviyo
+   *   The reference to Klaviyo instance of this class.
+   */
   private static $instance;
 
   /**
@@ -264,5 +268,19 @@ class Klaviyo {
 
     return $klaviyo_id;
   }
+
+  /**
+   * Prevent cloning of the instance of the Klaviyo instance.
+   *
+   * @return void
+   */
+  private function __clone() {}
+
+  /**
+   * Prevent cloning of the unserializing of the Klaviyo instance.
+   *
+   * @return void
+   */
+  private function __wakeup() {}
 
 }
