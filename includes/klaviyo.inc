@@ -2,12 +2,19 @@
 
 class Klaviyo {
 
+  /**
+   * The Kalviyo adapter used for communicating with the Klaviyo API Library.
+   *
+   * @var KlaviyoAdapter
+   */
   public $api;
-  private $siteId;
+
   private $apiKey;
+  private $siteId;
+
   private static $instance;
 
-  private function __construct() {
+  protected function __construct() {
     $this->setSiteId();
     $this->apiKey = variable_get('klaviyo_api_key', '');
     $this->api = new KlaviyoAdapter($this->apiKey);
@@ -21,7 +28,7 @@ class Klaviyo {
     return static::$instance;
   }
 
-  private function setSiteId() {
+  protected function setSiteId() {
     $this->siteId = variable_get('klaviyo_drupal_site_id', '');
 
     if (empty($this->siteId)) {
@@ -35,6 +42,11 @@ class Klaviyo {
   public function getSiteId() {
     return $this->siteId;
   }
+
+  public function getKlaviyoIdentifier($entity_type, $entity_id) {
+    return base64_encode($this->getSiteId() . '_' . $entity_type . '_' . $entity_id);
+  }
+
 
   public function createFullListId($list) {
     return $list->listType . ':' . $list->id;
@@ -102,17 +114,13 @@ class Klaviyo {
   }
 
   protected function preparePersonConfigurationDrupalInfo($entity_type, EntityMetadataWrapper $wrapper, &$person_configuration) {
-    $person_configuration['id'] = $this->getKlaviyoIdentifier($entity_type, $wrapper);
+    $person_configuration['id'] = $this->getKlaviyoIdentifier($entity_type, $wrapper->getIdentifier());
     $person_configuration['drupal.site_id'] = $this->getSiteId();
     $person_configuration['drupal.entity_type'] = $entity_type;
     $person_configuration['drupal.entity_bundle'] = $wrapper->getBundle();
     $person_configuration['drupal.entity_id'] = $wrapper->getIdentifier();
 
     return $person_configuration;
-  }
-
-  public function getKlaviyoIdentifier($entity_type, EntityMetadataWrapper $wrapper) {
-    return base64_encode($this->getSiteId() . '_' . $entity_type . '_' . $wrapper->getIdentifier());
   }
 
   protected function preparePersonConfigurationFromAccount(EntityMetadataWrapper $wrapper, &$person_configuration) {

@@ -25,7 +25,6 @@ function klaviyo_user_load($users) {
   foreach ($sync_records as $entity_id => $sync_record) {
     $users[$entity_id]->klaviyo = $sync_record;
     $wrapper = entity_metadata_wrapper('user', $users[$entity_id]);
-    $users[$entity_id]->klaviyo['klaviyo_id'] = Klaviyo::getInstance()->getKlaviyoIdentifier('user', $wrapper);
   }
 }
 
@@ -103,6 +102,9 @@ function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
   }
 }
 
+/**
+ * Submit handler for the user_admin_settings form.
+ */
 function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
   $values = $form_state['values'];
 
@@ -155,6 +157,9 @@ function klaviyo_form_field_ui_field_edit_form_alter(&$form, $form_state, $form_
   }
 }
 
+/**
+ * Validation handler for the field_ui_field_edit form.
+ */
 function klaviyo_form_field_ui_field_edit_form_validate(&$form, &$form_state) {
   $values = $form_state['values'];
 
@@ -164,6 +169,9 @@ function klaviyo_form_field_ui_field_edit_form_validate(&$form, &$form_state) {
   }
 }
 
+/**
+ * Submit handler for the field_ui_field_edit form.
+ */
 function klaviyo_form_field_ui_field_edit_form_submit(&$form, &$form_state) {
   $values = $form_state['values'];
 
@@ -179,6 +187,18 @@ function klaviyo_form_field_ui_field_edit_form_submit(&$form, &$form_state) {
   }
 }
 
+/**
+ * Sync an entity to Klaviyo.
+ *
+ * @param string $entity_type
+ *   The type of entity to sync.
+ * @param object $entity
+ *   The entity object to sync.
+ *
+ * @return array
+ *   The sync record that contains metadata about the sync or an empty array if
+ *   the sync record creation was not successful.
+ */
 function klaviyo_sync_entity($entity_type, $entity) {
   $klaviyo = Klaviyo::getInstance();
 
@@ -202,6 +222,17 @@ function klaviyo_sync_entity($entity_type, $entity) {
   return kalviyo_sync_record_save($sync_record);
 }
 
+/**
+ * Prepare the sync record from an entity.
+ *
+ * @param string $entity_type
+ *   The type of entity for which to prepare the sync record.
+ * @param EntityMetadataWrapper $wrapper
+ *   The EMW of the entity for which to prepare the sync record.
+ *
+ * @return array
+ *   The prepared sync record that maybe written to the database.
+ */
 function klaviyo_sync_prepare_from_entity($entity_type, EntityMetadataWrapper $wrapper) {
   $sync_record = array();
 
@@ -217,18 +248,29 @@ function klaviyo_sync_prepare_from_entity($entity_type, EntityMetadataWrapper $w
     'synced' => 0,
   );
 
-  // klaviyo_is is a derived value.
-  // @see Klaviyo::getEntityKlaviyoIdentifier().
-  if (isset($sync_record['klaviyo_id'])) {
-    unset($sync_record['klaviyo_id']);
-  }
   return $sync_record;
 }
 
+/**
+ * Save the sync record to the database.
+ *
+ * @param array $sync_record
+ *   The sync record that will be written to the database.
+ *
+ * @return array
+ *   The sync record that contains metadata about the sync or an empty array if
+ *   the write was not successful.
+ */
 function kalviyo_sync_record_save($sync_record) {
   $existing_record = klaviyo_sync_record_load('user', array($sync_record['entity_id']));
   if (!empty($existing_record) && $existing_record = reset($existing_record)) {
     $sync_record += $existing_record;
+  }
+
+  // klaviyo_is is a derived value.
+  // @see Klaviyo::getEntityKlaviyoIdentifier().
+  if (isset($sync_record['klaviyo_id'])) {
+    unset($sync_record['klaviyo_id']);
   }
 
   $successful = FALSE;
@@ -239,9 +281,23 @@ function kalviyo_sync_record_save($sync_record) {
     $successful = (bool) klaviyo_sync_record_update($sync_record);
   }
 
-  return !empty($successful) ? $sync_record : array();
+  if ($successful) {
+    $sync_record += ['klaviyo_id' => Klaviyo::getInstance()->getKlaviyoIdentifier($sync_record['entity_type'], $sync_record['entity_id'])];
+  }
+  return $sync_record;
 }
 
+/**
+ * Load sync records for the specified entities.
+ *
+ * @param string $entity_type
+ *   The type of entity sync that should be loaded.
+ * @param array $entity_ids
+ *   The ids of the entities for which to load the sync records.
+ *
+ * @return array
+ *   An array of associated sync records for the specified entities.
+ */
 function klaviyo_sync_record_load($entity_type, $entity_ids = array()) {
   $select = db_select('klaviyo', 'k');
   $select->fields('k');
@@ -249,11 +305,25 @@ function klaviyo_sync_record_load($entity_type, $entity_ids = array()) {
   $select->condition('entity_type', $entity_type);
   $select->condition('entity_id', $entity_ids, 'IN');
 
-  return $select->execute()->fetchAllAssoc('entity_id', PDO::FETCH_ASSOC);
+  $results = $select->execute()->fetchAllAssoc('entity_id', PDO::FETCH_ASSOC);
+  foreach ($results as &$result) {
+    $result += ['klaviyo_id' => Klaviyo::getInstance()->getKlaviyoIdentifier($entity_type, $result['entity_id'])];
+  }
+
+  return $results;
 }
 
+/**
+ * Insert a new individual sync record to the database.
+ *
+ * @param array $sync_record
+ *   The sync record that should be written to the database.
+ *
+ * @return array
+ *   Returns a copy of the written sync record if successful.
+ */
 function klaviyo_sync_record_insert($sync_record) {
-  $return_value = NULL;
+  $return_value = array();
   $sync_record['updated'] = REQUEST_TIME;
 
   try {
@@ -268,6 +338,15 @@ function klaviyo_sync_record_insert($sync_record) {
   return $return_value;
 }
 
+/**
+ * Updates an existing sync record to the database.
+ *
+ * @param array $sync_record
+ *   The sync record that should be written to the database.
+ *
+ * @return int
+ *   Returns the number of records that were written to the database.
+ */
 function klaviyo_sync_record_update($sync_record) {
   $count = 0;
 
@@ -285,6 +364,14 @@ function klaviyo_sync_record_update($sync_record) {
   return $count;
 }
 
+/**
+ * Removes and existing sync record from the database.
+ *
+ * @param array $sync_record
+ *   The sync record that should be removed from the database.
+ *
+ * @return void
+ */
 function klaviyo_sync_record_delete($sync_record) {
   db_delete('klaviyo')
     ->condition('entity_type', $sync_record['entity_type'])
@@ -292,14 +379,25 @@ function klaviyo_sync_record_delete($sync_record) {
     ->execute();
 }
 
-function klaviyo_get_unsynced_entities($entity_type, $limit = 0) {
+/**
+ * Retrieve a specified number of unsynced entities.
+ *
+ * @param string $entity_type
+ *   The entity type for which to look up unsynced entities.
+ * @param integer $limit
+ *   The maximum number of records to retrieve.
+ *
+ * @param array
+ *   The unsynced records.
+ */
+function klaviyo_get_unsynced_entities($entity_type, $limit = 10) {
   $select = db_select('klaviyo', 'k');
   $select->fields('k', array('entity_id'));
 
   $select->condition('entity_type', $entity_type);
   $select->condition('synced', 0);
 
-  if ($limit) {
+  if ($limit > 0) {
     $select->range(0, $limit);
   }
   $entity_ids = array_keys($select->execute()->fetchAllAssoc('entity_id', PDO::FETCH_ASSOC));
