@@ -1,7 +1,8 @@
 name = Klaviyo
-description = Klaviyo service integration.
+description = Klaviyo email marketing service integration.
 package = Klaviyo
 core = 7.x
+php = 5.5
 dependencies[] = entity
 dependencies[] = select_or_other
 files[] = includes/klaviyo.inc
