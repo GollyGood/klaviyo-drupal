@@ -4,4 +4,5 @@ package = Klaviyo
 core = 7.x
 dependencies[] = entity
 dependencies[] = select_or_other
-files[] = KlaviyoAdapter.php
+files[] = includes/klaviyo.inc
+files[] = includes/klaviyo_adapter.inc

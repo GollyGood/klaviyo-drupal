@@ -1,8 +1,6 @@
 <?php
 
-require_once __DIR__ . '/KlaviyoAdapter.php';
-
-class KlaviyoDrupal {
+class Klaviyo {
 
   public $api;
   private $siteId;
