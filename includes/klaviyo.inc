@@ -89,10 +89,29 @@ class Klaviyo {
     return base64_encode($this->getSiteId() . '_' . $entity_type . '_' . $entity_id);
   }
 
+  /**
+   * Create a full list id that can be used to identify the list's type and id.
+   *
+   * @param ListModel $list
+   *   The list for which to create the id.
+   *
+   * @return string
+   *   A string representing the list's type and id. Example: TYPE:ID
+   */
   public function createFullListId($list) {
     return $list->listType . ':' . $list->id;
   }
 
+  /**
+   * Parse and retrieve a full list id.
+   *
+   * @param string $list_full_id
+   *   The full list id to be parsed.
+   *
+   * @return array
+   *   The complete array of identifiers for the list.
+   *   Example: array(0 => TYPE, 1 => ID)
+   */
   public function parseFullListId($list_full_id) {
     $list_options = $this->getCachedListOptions();
 
@@ -104,11 +123,22 @@ class Klaviyo {
     return $parsed_list_full_id + array(0 => '', 1 => '');
   }
 
-  public function getCachedListOptions() {
+  /**
+   * Retrieve an array of list options that can be used in form fields.
+   *
+   * @param bool $reset
+   *   Determines if the cached array of options should be reset. When TRUE, the
+   *   lists will be retrieved from Klaviyo and re-cached.
+   *
+   * @return array
+   *   An array of list options keyed by the lists' full id that can be used in
+   *   form fields.
+   */
+  public function getCachedListOptions($reset = FALSE) {
     $cache = cache_get('klaviyo:list_options');
 
     $options = array();
-    if ($cache && !empty($cache->data)) {
+    if (!$reset && $cache && !empty($cache->data)) {
       $options = $cache->data;
     }
     else {
@@ -121,6 +151,17 @@ class Klaviyo {
     return $options;
   }
 
+  /**
+   * Prepare the person configuration array for writing to Klaviyo.
+   *
+   * @param string $entity_type
+   *   The entity type for which to prepare the person configuration.
+   * @param EntityMetadataWrapper $wrapper
+   *   The entity EMW to use for preparing the person configuration.
+   *
+   * @return array
+   *   The prepared person configuration ready for writing to Klaviyo.
+   */
   public function preparePersonConfiguration($entity_type, EntityMetadataWrapper $wrapper) {
     $person_configuration = array();
 
@@ -139,6 +180,21 @@ class Klaviyo {
     return $person_configuration;
   }
 
+  /**
+   * Prepare the mapped attributes for a person.
+   *
+   * @param string $entity_type
+   *   The entity type for which to prepare the mapped attributes of the person
+   *   configuration.
+   * @param EntityMetadataWrapper $wrapper
+   *   The entity EMW to use for preparing the mapped attributes of the person
+   *   configuration.
+   * @param array $person_configuration
+   *   The person configuration to which configurations should be appended.
+   *
+   * @return array
+   *   The person configuration containing the mapped attribute values.
+   */
   protected function preparePersonConfigurationKlaviyoAttributes($entity_type, EntityMetadataWrapper $wrapper, &$person_configuration) {
     $attributes = variable_get('klaviyo_person_attributes_' . $entity_type, array());
 
@@ -154,6 +210,22 @@ class Klaviyo {
     return $person_configuration;
   }
 
+  /**
+   * Prepare the Drupal specific custom attributes for a person.
+   *
+   * @param string $entity_type
+   *   The entity type for which to prepare the Drupal site and entity specific
+   *   custom attributes.
+   * @param EntityMetadataWrapper $wrapper
+   *   The entity EMW to use for preparing the Drupal site and entity specific
+   *   custom attributes.
+   * @param array $person_configuration
+   *   The person configuration to which configurations should be appended.
+   *
+   * @return array
+   *   The person configuration containing the Drupal site and entity specific
+   *   custom attributes.
+   */
   protected function preparePersonConfigurationDrupalInfo($entity_type, EntityMetadataWrapper $wrapper, &$person_configuration) {
     $person_configuration['id'] = $this->getKlaviyoIdentifier($entity_type, $wrapper->getIdentifier());
     $person_configuration['drupal.site_id'] = $this->getSiteId();
@@ -164,6 +236,19 @@ class Klaviyo {
     return $person_configuration;
   }
 
+  /**
+   * Prepare the Drupal Account entity custom attributes for a person.
+   *
+   * @param EntityMetadataWrapper $wrapper
+   *   The account EMW to use for preparing the account entity specific custom
+   *   attributes.
+   * @param array $person_configuration
+   *   The person configuration to which configurations should be appended.
+   *
+   * @return array
+   *   The person configuration containing the Account specific custom
+   *   attributes.
+   */
   protected function preparePersonConfigurationFromAccount(EntityMetadataWrapper $wrapper, &$person_configuration) {
     if (empty($person_configuration['$email'])) {
       $person_configuration['$email'] = $wrapper->mail->value();
@@ -175,11 +260,34 @@ class Klaviyo {
     return $person_configuration;
   }
 
+  /**
+   * Determine if Klaviyo integration has been enabled for the entity bundle.
+   *
+   * @param string $entity_type
+   *   The entity type of the bundle to check.
+   * @param string $bundle
+   *   (Optional) The bundle to check.
+   *
+   * @return bool
+   *   Returns TRUE if Klaviyo integration has been enabled for the specified
+   *   entity bundle.
+   */
   public function isEnabledOnEntity($entity_type, $bundle = '') {
     $settings = $this->getAllEntitySettings($entity_type, $bundle);
     return $this->isCompatiableEntity($entity_type, $bundle) && !empty($settings['enabled']);
   }
 
+  /**
+   * Retrieve the Klaviyo integration settings for the specified entity bundle.
+   *
+   * @param string $entity_type
+   *   The entity type of the bundle to retrieve the settings.
+   * @param string $bundle
+   *   (Optional) The bundle to retreive the settings.
+   *
+   * @return array
+   *   The Klaviyo settings associated with the Drupal entity.
+   */
   public function getAllEntitySettings($entity_type, $bundle = '') {
     $variable_name = "klaviyo_entity_settings_$entity_type";
 
@@ -190,17 +298,61 @@ class Klaviyo {
     return variable_get($variable_name, array('enabled' => FALSE, 'settings' => array('list' => '')));
   }
 
+  /**
+   * Determine if the entity bundle is compatiable with Klaviyo.
+   *
+   * @param string $entity_type
+   *   The entity type of the bundle to check for compatibility.
+   * @param string $bundle
+   *   (Optional) The bundle to check for compatibility.
+   *
+   * @return bool
+   *   Returns TRUE if the specified entity is compatiable with Klaviyo
+   *   integration and FALSE otherwise.
+   */
   public function isCompatiableEntity($entity_type, $bundle = '') {
     return $entity_type === 'user';
   }
 
+  /**
+   * Determine if the field type is mappable to Klaviyo attributes.
+   *
+   * @param string $entity_type
+   *   The entity type of the bundle to check if Klaviyo integration has been
+   *   enabled.
+   * @param string $field_type
+   *   The field type to check.
+   * @param string $bundle
+   *   (Optional) The bundle to check if Klaviyo integration has been
+   *   enabled.
+   *
+   * @return bool
+   *   Returns TRUE if the field type for the specified entity bundle can be
+   *   mapped to Klaviyo attributes and FALSE otherwise.
+   */
   public function isFieldMappable($entity_type, $field_type, $bundle = '') {
     $allowable_field_types = array('text', 'list_text');
 
     return ($this->isEnabledOnEntity($entity_type, $bundle) && in_array($field_type, $allowable_field_types));
   }
 
-  public function isFieldMapped($entity_type, $field_type, $bundle = '') {
+  /**
+   * Determine if the field has been mapped to a Klaviyo attribute.
+   *
+   * @param string $entity_type
+   *   The entity type of the bundle to check if Klaviyo integration has been
+   *   enabled.
+   * @param string $field_type
+   *   The name of the field to check.
+   * @param string $bundle
+   *   (Optional) The bundle to check if Klaviyo integration has been
+   *   enabled.
+   *
+   * @return bool
+   *   Returns TRUE if the field for the specified entity bundle has be mapped
+   *   to Klaviyo attributes and FALSE otherwise.
+   */
+  public function isFieldMapped($entity_type, $field_name, $bundle = '') {
     $is_mapped = FALSE;
     $variable_name = "klaviyo_person_attributes_$entity_type";
 
@@ -216,6 +368,9 @@ class Klaviyo {
     return $is_mapped;
   }
 
+  /**
+   * @todo: Rename this method.
+   */
   public function saveEntity($entity_type, EntityMetadataWrapper $wrapper) {
     if (!$this->isEnabledOnEntity($entity_type)) {
       return;
@@ -235,6 +390,19 @@ class Klaviyo {
     return $successful;
   }
 
+  /**
+   * Retrieve an array of field options for mappable Klaviyo attributes.
+   *
+   * @param string $entity_type
+   *   The entity type for which to retrieve the mapping options.
+   * @param string $field_name
+   *   The current field name to retrieve the attribute options.
+   * @param string $bundle
+   *   (Optional) The bundle for which to retrieve the mapping options.
+   *
+   * @return array
+   *   An array of form options for the available mappable attribute options.
+   */
   public function getPersonMappableAttributeOptions($entity_type, $field_name, $bundle = '') {
     $variable_name = "klaviyo_person_attributes_$entity_type";
     if (!empty($bundle)) {
@@ -255,6 +423,21 @@ class Klaviyo {
     return $attributes;
   }
 
+  /**
+   * Retrieve the Klaviyo id associated with a person.
+   *
+   * @param string $entity_type
+   *   The entity type to use for determining which list to perform the lookup
+   *   against.
+   * @param string $email
+   *   The email of the person to be looked up.
+   * @param string $bundle
+   *   (Optional) The entity bundle to use for determining which list to
+   *   perform the lookup against.
+   *
+   * @return string
+   *   The unique Klaviyo identifier of the person looked up.
+   */
   public function lookupKalviyoIdByEmail($entity_type, $email, $bundle = '') {
     $klaviyo_id = 0;
     $settings = $this->getAllEntitySettings($entity_type, $bundle);
