@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * The main Klaviyo/Drupal integration class.
+ */
 class Klaviyo {
 
   /**
@@ -14,12 +17,23 @@ class Klaviyo {
 
   private static $instance;
 
+  /**
+   * The constructor for the Klaviyo integration class.
+   *
+   * @see Klaviyo::getInstance().
+   */
   protected function __construct() {
     $this->setSiteId();
     $this->apiKey = variable_get('klaviyo_api_key', '');
     $this->api = new KlaviyoAdapter($this->apiKey);
   }
 
+  /**
+   * Retrieve an instance of the Klaviyo/Drupal integration class.
+   *
+   * @return Klaviyo
+   *   The single available instance of the Klaviyo/Drupal integration class.
+   */
   public static function getInstance() {
     if (NULL === static::$instance) {
       static::$instance = new static();
@@ -28,6 +42,11 @@ class Klaviyo {
     return static::$instance;
   }
 
+  /**
+   * Set the site id used to identify this Drupal site to Klaviyo.
+   *
+   * @return $this
+   */
   protected function setSiteId() {
     $this->siteId = variable_get('klaviyo_drupal_site_id', '');
 
@@ -39,14 +58,32 @@ class Klaviyo {
     return $this;
   }
 
+  /**
+   * Retrieve the site id used to identify this Drupal site to Klaviyo.
+   *
+   * @return string
+   *   A unique identifier of this Drupal site for for use with Klaviyo.
+   */
   public function getSiteId() {
     return $this->siteId;
   }
 
+  /**
+   * Retrieve the unique Klaviyo identifier for a specific entity.
+   *
+   * @todo: Rename this method.
+   *
+   * @param string $entity_type
+   *   The entity type to use for building the unique identifier.
+   * @param int $entity_id
+   *   The entity id to use for building the unique identifier.
+   *
+   * @return string
+   *   A unique identifier of this Drupal entity for for use with Klaviyo.
+   */
   public function getKlaviyoIdentifier($entity_type, $entity_id) {
     return base64_encode($this->getSiteId() . '_' . $entity_type . '_' . $entity_id);
   }
-
 
   public function createFullListId($list) {
     return $list->listType . ':' . $list->id;

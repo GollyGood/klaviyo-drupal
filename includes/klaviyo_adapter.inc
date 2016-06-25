@@ -1,6 +1,6 @@
 <?php
 
-// @todo: Get all this Klaviyo API specific stuff out of here!
+// @todo: Get rid of this ASAP!!!
 require_once DRUPAL_ROOT . '/sites/all/libraries/klaviyo-api-php/vendor/autoload.php';
 
 class KlaviyoAdapter {
