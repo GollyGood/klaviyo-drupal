@@ -85,7 +85,7 @@ function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
     );
 
     /*
-      @todo: This is not yet fully implemented remove into branch.
+     @todo: Put this work into its own branch.
     $form['klaviyo']['settings']['list'] = array(
       '#type' => 'select_or_other',
       '#title' => t('List/Segment'),
@@ -95,9 +95,9 @@ function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
         '_none' => t('Not used'),
       ) + $klaviyo->getCachedListOptions(),
       '#description' => t("Select a list to add all Drupal user accounts. <br /> Note: If you select a segment then users will not be added as segments are dynamically generated lists."),
-      $form['#submit'][] = 'klaviyo_form_user_admin_settings_alter_validate';
     );
-    */
+     */
+    /*$form['#validate'][] = 'klaviyo_form_user_admin_settings_alter_validate';*/
 
     $form['#submit'][] = 'klaviyo_form_user_admin_settings_alter_submit';
   }
@@ -111,7 +111,7 @@ function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
 
   if (!empty($values['klaviyo'])) {
     /*
-      @todo: This is not yet fully implemented remove into branch.
+      @todo: Put this into its own branch.
     if (!empty($values['klaviyo']['settings']['list']) && $list_id_full = $values['klaviyo']['settings']['list']) {
       $klaviyo = Klaviyo::getInstance();
 
@@ -209,7 +209,7 @@ function klaviyo_sync_entity($entity_type, $entity) {
   }
 
   $wrapper = entity_metadata_wrapper($entity_type, $entity);
-  $successful = $klaviyo->saveEntity($entity_type, $wrapper);
+  $successful = $klaviyo->savePersonFromEntity($entity_type, $wrapper);
 
   $sync_record = klaviyo_sync_prepare_from_entity($entity_type, $wrapper);
 

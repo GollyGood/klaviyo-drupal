@@ -369,9 +369,18 @@ class Klaviyo {
   }
 
   /**
-   * @todo: Rename this method.
+   * Write person to Klviyo based on mapped Drupal Entity.
+   *
+   * @param string $entity_type
+   *   The type of the entity for which to prepare the person configuration.
+   * @param EntityMetdataWrapper $wrapper
+   *   The EMW for the entity to use for populating attributes of the person
+   *   configuration.
+   *
+   * @return bool
+   *   Returns TRUE if the person was written to Klaviyo and FALSE otherwise.
    */
-  public function saveEntity($entity_type, EntityMetadataWrapper $wrapper) {
+  public function savePersonFromEntity($entity_type, EntityMetadataWrapper $wrapper) {
     if (!$this->isEnabledOnEntity($entity_type)) {
       return;
     }
@@ -439,13 +448,20 @@ class Klaviyo {
    *   The unique Klaviyo identifier of the person looked up.
    */
   public function lookupKalviyoIdByEmail($entity_type, $email, $bundle = '') {
-    $klaviyo_id = 0;
+    $klaviyo_id = '';
     $settings = $this->getAllEntitySettings($entity_type, $bundle);
 
     if (!empty($settings['settings']['list']) && $list_id_full = $settings['settings']['list']) {
       list(, $list_id) = $this->parseFullListId($list_id_full);
       if ($person_list = $this->api->lookUpPersonFromList($list_id, $email)) {
-        $klaviyo_id = $person_list->person->id;
+        $entity_id = $person_list->person->getCustomAttribute('drupal.entity_id');
+
+        if (!empty($entity_id)) {
+          $klaviyo_id = $this->getKlaviyoIdentifier($entity_type, $entity_id);
+        }
+        else {
+          $klaviyo_id = $this->person->id;
+        }
       }
     }
 
