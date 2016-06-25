@@ -60,11 +60,10 @@ function klaviyo_schema() {
       ),
     ),
     'indexes' => array(
-      'entity_type' => array('entity_type'),
       'entity_bundle' => array('entity_bundle'),
-      'entity_id' => array('entity_id'),
+      'klaviyo_id' => array('klaviyo_id'),
     ),
-    'primary key' => array('klaviyo_id'),
+    'primary key' => array('entity_type', 'entity_id'),
   );
 
   return $schema;

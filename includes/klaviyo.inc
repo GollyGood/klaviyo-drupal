@@ -174,8 +174,9 @@ class Klaviyo {
 
     $person_configuration = $this->preparePersonConfiguration($entity_type, $entity);
 
-    // @todo: Get that edit array out of here!
-    $person_configuration += $edit['data']['klaviyo'];
+    if (!empty($entity->klaviyo['klaviyo_id'])) {
+      $person_configuration['id'] = $entity->klaviyo['klaviyo_id'];
+    }
 
     if (!empty($person_configuration)) {
       $this->api->savePerson($person_configuration);
@@ -200,6 +201,20 @@ class Klaviyo {
     }
 
     return $attributes;
+  }
+
+  public function lookupKalviyoIdByEmail($entity_type, $email, $bundle = '') {
+    $klaviyo_id = 0;
+    $settings = $this->getAllEntitySettings($entity_type, $bundle);
+
+    if (!empty($settings['settings']['list']) && $list_id_full = $settings['settings']['list']) {
+      list(, $list_id) = $this->parseFullListId($list_id_full);
+      if ($person_list = $this->api->lookUpPersonFromList($list_id, $email)) {
+        $klaviyo_id = $person_list->person->id;
+      }
+    }
+
+    return $klaviyo_id;
   }
 
 }
