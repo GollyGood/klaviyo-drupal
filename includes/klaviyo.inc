@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Contains the Klaviyo class.
+ */
+
+/**
  * The main Klaviyo/Drupal integration class.
  */
 class Klaviyo {
@@ -16,6 +21,8 @@ class Klaviyo {
   private $siteId;
 
   /**
+   * The singleton instance of the Drupal Klaviyo class.
+   *
    * @var Klaviyo
    *   The reference to Klaviyo instance of this class.
    */
@@ -24,7 +31,7 @@ class Klaviyo {
   /**
    * The constructor for the Klaviyo integration class.
    *
-   * @see Klaviyo::getInstance().
+   * @see Klaviyo::getInstance()
    */
   protected function __construct() {
     $this->setSiteId();
@@ -75,12 +82,12 @@ class Klaviyo {
   /**
    * Retrieve the unique Klaviyo identifier for a specific entity.
    *
-   * @todo: Rename this method.
-   *
    * @param string $entity_type
    *   The entity type to use for building the unique identifier.
    * @param int $entity_id
    *   The entity id to use for building the unique identifier.
+   *
+   * @todo: Rename this method.
    *
    * @return string
    *   A unique identifier of this Drupal entity for for use with Klaviyo.
@@ -98,7 +105,7 @@ class Klaviyo {
    * @return string
    *   A string representing the list's type and id. Example: TYPE:ID
    */
-  public function createFullListId($list) {
+  public function createFullListId(ListModel $list) {
     return $list->listType . ':' . $list->id;
   }
 
@@ -342,7 +349,7 @@ class Klaviyo {
    * @param string $entity_type
    *   The entity type of the bundle to check if Klaviyo integration has been
    *   enabled.
-   * @param string $field_type
+   * @param string $field_name
    *   The name of the field to check.
    * @param string $bundle
    *   (Optional) The bundle to check if Klaviyo integration has been
@@ -373,7 +380,7 @@ class Klaviyo {
    *
    * @param string $entity_type
    *   The type of the entity for which to prepare the person configuration.
-   * @param EntityMetdataWrapper $wrapper
+   * @param EntityMetadataWrapper $wrapper
    *   The EMW for the entity to use for populating attributes of the person
    *   configuration.
    *
@@ -381,8 +388,10 @@ class Klaviyo {
    *   Returns TRUE if the person was written to Klaviyo and FALSE otherwise.
    */
   public function savePersonFromEntity($entity_type, EntityMetadataWrapper $wrapper) {
+    $successful = FALSE;
+
     if (!$this->isEnabledOnEntity($entity_type)) {
-      return;
+      return $successful;
     }
 
     $person_configuration = $this->preparePersonConfiguration($entity_type, $wrapper);
@@ -391,7 +400,6 @@ class Klaviyo {
       $person_configuration['id'] = $wrapper->value()->klaviyo['klaviyo_id'];
     }
 
-    $successful = FALSE;
     if (!empty($person_configuration)) {
       $successful = $this->api->savePerson($person_configuration);
     }
@@ -470,15 +478,11 @@ class Klaviyo {
 
   /**
    * Prevent cloning of the instance of the Klaviyo instance.
-   *
-   * @return void
    */
   private function __clone() {}
 
   /**
    * Prevent cloning of the unserializing of the Klaviyo instance.
-   *
-   * @return void
    */
   private function __wakeup() {}
 

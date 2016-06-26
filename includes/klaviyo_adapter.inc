@@ -1,7 +1,14 @@
 <?php
 
+/**
+ * @file
+ * Contains the KlaviyoAdapter class.
+ */
+
 // @todo: Get rid of this ASAP!!!
 require_once DRUPAL_ROOT . '/sites/all/libraries/klaviyo-api-php/vendor/autoload.php';
+
+use Klaviyo;
 
 /**
  * The Klaviyo API PHP Library adapter for Drupal.
@@ -11,7 +18,7 @@ class KlaviyoAdapter {
   /**
    * The Klaviyo API PHP Library facade.
    *
-   * @var Klaviyo\KlaviyoFacade
+   * @var KlaviyoFacade
    */
   public $klaviyo;
 
@@ -22,7 +29,7 @@ class KlaviyoAdapter {
    *   The Klaviyo API key to use when creating the Klaviyo api service.
    */
   public function __construct($api_key) {
-    $this->klaviyo = Klaviyo\KlaviyoFacade::create($api_key);
+    $this->klaviyo = KlaviyoFacade::create($api_key);
   }
 
   /**
@@ -91,7 +98,7 @@ class KlaviyoAdapter {
    * @param ListModel $list
    *   The list model to which the person should be added.
    *
-   * @return void
+   * @return $this
    */
   public function subscribePersonToList(PersonModel $person, ListModel $list) {
     if (!empty($list)) {
@@ -101,6 +108,8 @@ class KlaviyoAdapter {
       catch (Exception $e) {
         watchdog_exception('klaviyo', $e);
       }
+
+      return $this;
     }
   }
 
@@ -145,7 +154,7 @@ class KlaviyoAdapter {
       $this->klaviyo->service('track')->identify($person);
       $successful = TRUE;
     }
-    catch(Exception $e) {
+    catch (Exception $e) {
       watchdog_exception('klaviyo', $e);
     }
 
