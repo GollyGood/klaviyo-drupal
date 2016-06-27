@@ -8,8 +8,6 @@
 // @todo: Get rid of this ASAP!!!
 require_once DRUPAL_ROOT . '/sites/all/libraries/klaviyo-api-php/vendor/autoload.php';
 
-use Klaviyo;
-
 /**
  * The Klaviyo API PHP Library adapter for Drupal.
  */
@@ -29,7 +27,7 @@ class KlaviyoAdapter {
    *   The Klaviyo API key to use when creating the Klaviyo api service.
    */
   public function __construct($api_key) {
-    $this->klaviyo = KlaviyoFacade::create($api_key);
+    $this->klaviyo = Klaviyo\KlaviyoFacade::create($api_key);
   }
 
   /**
