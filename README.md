@@ -4,7 +4,8 @@
 
 1. [Select (or other)](https://www.drupal.org/project/select_or_other)
 2. [Entity API](https://www.drupal.org/project/entity)
-3. [Klaviyo API PHP Library](https://github.com/GollyGood/klaviyo-api-php/archive/0.1.0.tar.gz). (See installation instructions below.)
+3. [Libraries API](https://www.drupal.org/project/libraries)
+4. [Klaviyo API PHP Library](https://github.com/GollyGood/klaviyo-api-php/archive/0.1.0.tar.gz). (See installation instructions below.)
 
 ## Installation
 
