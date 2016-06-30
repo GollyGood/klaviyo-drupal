@@ -24,6 +24,38 @@ function klaviyo_menu() {
 }
 
 /**
+ * Implements hook_permission().
+ */
+function klaviyo_permission() {
+  return array(
+    'administer klaviyo api integration' => array(
+      'title' => t('Administer Klaviyo'),
+      'description' => t('Perform administration tasks for the Klaviyo module.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_libraries_info().
+ */
+function klaviyo_libraries_info() {
+  $libraries = array();
+  $libraries['klaviyo-api-php'] = array(
+    'name' => 'Klaviyo API PHP Library',
+    'vendor url' => 'http://gollygood.github.io/klaviyo-api-php/',
+    'download url' => 'https://github.com/GollyGood/klaviyo-api-php/releases',
+    'download file url' => 'https://github.com/GollyGood/klaviyo-api-php/archive/0.1.0.tar.gz',
+    'version' => '0.1.0',
+    'files' => array(
+      'php' => array(
+        'vendor/autoload.php'
+      ),
+    ),
+  );
+  return $libraries;
+}
+
+/**
  * Implements hook_cron().
  */
 function klaviyo_cron() {
@@ -72,7 +104,11 @@ function klaviyo_user_delete($account) {
  * Implements hook_form_FORM_ID_alter().
  */
 function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
-  $klaviyo = Klaviyo::getInstance();
+  $klaviyo = klaviyo_api_get_instance();
+  if (empty($klaviyo)) {
+    drupal_set_message(klaviyo_get_installation_instructions(), 'warning');
+    return;
+  }
 
   if ($klaviyo->isCompatiableEntity('user')) {
     $default_values = $klaviyo->getAllEntitySettings('user');
@@ -131,7 +167,7 @@ function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
     /*
       @todo: Put this into its own branch.
     if (!empty($values['klaviyo']['settings']['list']) && $list_id_full = $values['klaviyo']['settings']['list']) {
-      $klaviyo = Klaviyo::getInstance();
+      $klaviyo = klaviyo_api_get_instance();
 
       list(, $list_id) = $klaviyo->parseFullListId($list_id_full);
       if (empty($list_id)) {
@@ -149,7 +185,11 @@ function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
  * Implements hook_form_FORM_ID_alter().
  */
 function klaviyo_form_field_ui_field_edit_form_alter(&$form, $form_state, $form_id) {
-  $klaviyo = Klaviyo::getInstance();
+  $klaviyo = klaviyo_api_get_instance();
+  if (empty($klaviyo)) {
+    drupal_set_message(klaviyo_get_installation_instructions(), 'warning');
+    return;
+  }
 
   $entity_type = !empty($form['instance']['entity_type']['#value']) ? $form['instance']['entity_type']['#value'] : '';
   if ($klaviyo->isFieldMappable($entity_type, $form['#field']['type'])) {
@@ -220,9 +260,9 @@ function klaviyo_form_field_ui_field_edit_form_submit(&$form, &$form_state) {
  *   the sync record creation was not successful.
  */
 function klaviyo_sync_entity($entity_type, $entity) {
-  $klaviyo = Klaviyo::getInstance();
+  $klaviyo = klaviyo_api_get_instance();
 
-  if (!$klaviyo->isEnabledOnEntity($entity_type)) {
+  if (empty($klaviyo) || !$klaviyo->isEnabledOnEntity($entity_type)) {
     return FALSE;
   }
 
@@ -282,6 +322,11 @@ function klaviyo_sync_prepare_from_entity($entity_type, EntityMetadataWrapper $w
  *   the write was not successful.
  */
 function kalviyo_sync_record_save($sync_record) {
+  $klaviyo = klaviyo_api_get_instance();
+  if (empty($klaviyo)) {
+    return array();
+  }
+
   $existing_record = klaviyo_sync_record_load('user', array($sync_record['entity_id']));
   if (!empty($existing_record) && $existing_record = reset($existing_record)) {
     $sync_record += $existing_record;
@@ -302,7 +347,7 @@ function kalviyo_sync_record_save($sync_record) {
   }
 
   if ($successful) {
-    $sync_record += ['klaviyo_id' => Klaviyo::getInstance()->getKlaviyoIdentifier($sync_record['entity_type'], $sync_record['entity_id'])];
+    $sync_record += ['klaviyo_id' => $klaviyo->getKlaviyoIdentifier($sync_record['entity_type'], $sync_record['entity_id'])];
   }
   return $sync_record;
 }
@@ -319,6 +364,11 @@ function kalviyo_sync_record_save($sync_record) {
  *   An array of associated sync records for the specified entities.
  */
 function klaviyo_sync_record_load($entity_type, $entity_ids = array()) {
+  $klaviyo = klaviyo_api_get_instance();
+  if (empty($klaviyo)) {
+    return array();
+  }
+
   $select = db_select('klaviyo', 'k');
   $select->fields('k');
 
@@ -327,7 +377,7 @@ function klaviyo_sync_record_load($entity_type, $entity_ids = array()) {
 
   $results = $select->execute()->fetchAllAssoc('entity_id', PDO::FETCH_ASSOC);
   foreach ($results as &$result) {
-    $result += ['klaviyo_id' => Klaviyo::getInstance()->getKlaviyoIdentifier($entity_type, $result['entity_id'])];
+    $result += ['klaviyo_id' => $klaviyo->getKlaviyoIdentifier($entity_type, $result['entity_id'])];
   }
 
   return $results;
@@ -422,4 +472,32 @@ function klaviyo_get_unsynced_entities($entity_type, $limit = 10) {
   }
   $entity_ids = array_keys($select->execute()->fetchAllAssoc('entity_id', PDO::FETCH_ASSOC));
   return user_load_multiple($entity_ids);
+}
+
+/**
+ * Retrieve the Klaviyo instance.
+ *
+ * @return Klaviyo
+ */
+function klaviyo_api_get_instance() {
+  $library = libraries_load('klaviyo-api-php');
+
+  $klaviyo = NULL;
+  if (!empty($library['loaded'])) {
+    try {
+      $klaviyo = Klaviyo::getInstance();
+    }
+    catch (Exception $e) {
+      watchdog_exception('klaviyo', $e);
+    }
+  }
+
+  return $klaviyo;
+}
+
+/**
+ * @todo: Write installation instructions.
+ */
+function klaviyo_get_installation_instructions() {
+  return t('Here are some instructions for installing the library.');
 }

@@ -34,8 +34,12 @@ class Klaviyo {
    * @see Klaviyo::getInstance()
    */
   protected function __construct() {
-    $this->setSiteId();
     $this->apiKey = variable_get('klaviyo_api_key', '');
+    if (empty($this->apiKey)) {
+      throw new Exception('Unable to create an instance of the Klaviyo class because the private API key has not been set.');
+    }
+
+    $this->setSiteId();
     $this->api = new KlaviyoAdapter($this->apiKey);
   }
 

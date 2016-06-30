@@ -5,9 +5,6 @@
  * Contains the KlaviyoAdapter class.
  */
 
-// @todo: Get rid of this ASAP!!!
-require_once DRUPAL_ROOT . '/sites/all/libraries/klaviyo-api-php/vendor/autoload.php';
-
 /**
  * The Klaviyo API PHP Library adapter for Drupal.
  */

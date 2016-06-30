@@ -15,7 +15,10 @@ function klaviyo_api_integration_settings() {
 
   // Initialize an instance of Klaviyo. This will also initalized our site ID
   // for the first time if necessary.
-  $klaviyo = Klaviyo::getInstance();
+  $klaviyo = klaviyo_api_get_instance();
+  if (empty($klaviyo)) {
+    drupal_set_message(klaviyo_get_installation_instructions(), 'warning');
+  }
 
   $form['klaviyo_api_key'] = array(
     '#type' => 'textfield',
