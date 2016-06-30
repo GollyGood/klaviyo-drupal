@@ -91,12 +91,10 @@ class Klaviyo {
    * @param int $entity_id
    *   The entity id to use for building the unique identifier.
    *
-   * @todo: Rename this method.
-   *
    * @return string
    *   A unique identifier of this Drupal entity for for use with Klaviyo.
    */
-  public function getKlaviyoIdentifier($entity_type, $entity_id) {
+  public function getEntityKlaviyoIdentifier($entity_type, $entity_id) {
     return base64_encode($this->getSiteId() . '_' . $entity_type . '_' . $entity_id);
   }
 
@@ -238,7 +236,7 @@ class Klaviyo {
    *   custom attributes.
    */
   protected function preparePersonConfigurationDrupalInfo($entity_type, EntityMetadataWrapper $wrapper, &$person_configuration) {
-    $person_configuration['id'] = $this->getKlaviyoIdentifier($entity_type, $wrapper->getIdentifier());
+    $person_configuration['id'] = $this->getEntityKlaviyoIdentifier($entity_type, $wrapper->getIdentifier());
     $person_configuration['drupal.site_id'] = $this->getSiteId();
     $person_configuration['drupal.entity_type'] = $entity_type;
     $person_configuration['drupal.entity_bundle'] = $wrapper->getBundle();
@@ -469,7 +467,7 @@ class Klaviyo {
         $entity_id = $person_list->person->getCustomAttribute('drupal.entity_id');
 
         if (!empty($entity_id)) {
-          $klaviyo_id = $this->getKlaviyoIdentifier($entity_type, $entity_id);
+          $klaviyo_id = $this->getEntityKlaviyoIdentifier($entity_type, $entity_id);
         }
         else {
           $klaviyo_id = $this->person->id;

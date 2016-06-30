@@ -138,21 +138,6 @@ function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
       ),
     );
 
-    /*
-     @todo: Put this work into its own branch.
-    $form['klaviyo']['settings']['list'] = array(
-      '#type' => 'select_or_other',
-      '#title' => t('List/Segment'),
-      '#other' => t('Create a new list'),
-      '#default_value' => $default_values['settings']['list'],
-      '#options' => array(
-        '_none' => t('Not used'),
-      ) + $klaviyo->getCachedListOptions(),
-      '#description' => t("Select a list to add all Drupal user accounts. <br /> Note: If you select a segment then users will not be added as segments are dynamically generated lists."),
-    );
-     */
-    /*$form['#validate'][] = 'klaviyo_form_user_admin_settings_alter_validate';*/
-
     $form['#submit'][] = 'klaviyo_form_user_admin_settings_alter_submit';
   }
 }
@@ -164,19 +149,6 @@ function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
   $values = $form_state['values'];
 
   if (!empty($values['klaviyo'])) {
-    /*
-      @todo: Put this into its own branch.
-    if (!empty($values['klaviyo']['settings']['list']) && $list_id_full = $values['klaviyo']['settings']['list']) {
-      $klaviyo = klaviyo_api_get_instance();
-
-      list(, $list_id) = $klaviyo->parseFullListId($list_id_full);
-      if (empty($list_id)) {
-        $list = $klaviyo->api->createList($list_id_full);
-        $values['klaviyo']['settings']['list'] = $klaviyo->createFullListId($list);
-      }
-    }
-    */
-
     variable_set('klaviyo_entity_settings_user', $values['klaviyo']);
   }
 }
@@ -347,7 +319,7 @@ function kalviyo_sync_record_save($sync_record) {
   }
 
   if ($successful) {
-    $sync_record += ['klaviyo_id' => $klaviyo->getKlaviyoIdentifier($sync_record['entity_type'], $sync_record['entity_id'])];
+    $sync_record += ['klaviyo_id' => $klaviyo->getEntityKlaviyoIdentifier($sync_record['entity_type'], $sync_record['entity_id'])];
   }
   return $sync_record;
 }
@@ -377,7 +349,7 @@ function klaviyo_sync_record_load($entity_type, $entity_ids = array()) {
 
   $results = $select->execute()->fetchAllAssoc('entity_id', PDO::FETCH_ASSOC);
   foreach ($results as &$result) {
-    $result += ['klaviyo_id' => $klaviyo->getKlaviyoIdentifier($entity_type, $result['entity_id'])];
+    $result += ['klaviyo_id' => $klaviyo->getEntityKlaviyoIdentifier($entity_type, $result['entity_id'])];
   }
 
   return $results;
