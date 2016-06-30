@@ -6,5 +6,6 @@ php = 5.5
 dependencies[] = entity
 dependencies[] = libraries
 dependencies[] = select_or_other
+configure = admin/config/services/klaviyo
 files[] = includes/klaviyo.inc
 files[] = includes/klaviyo_adapter.inc

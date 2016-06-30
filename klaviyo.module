@@ -6,13 +6,33 @@
  */
 
 /**
+ * Implements hook_help().
+ */
+function klaviyo_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#klaviyo':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('The Klaviyo API Integration module provides integration with the email marketing service Klaviyo using the newly created Klaviyo API PHP Library.') . '</p>';
+      $output .= '<h3>' . t('Uses') . '</h3>';
+      $output .= '<dl>';
+      $output .= '<dt>' . t('Identifying users to the Klaviyo API') . '</dt>';
+      $output .= '<dd>' . t('This module allows Drupal users to be identified to Klaviyo. @todo: Finish this...') . '</dd>';
+      $output .= '<dt>' . t('Mapping fields with Klaviyo attributes') . '</dt>';
+      $output .= '<dd>' . t('@todo: Write this!') . '</dd>';
+      $output .= '</dl>';
+      return $output;
+  }
+}
+
+/**
  * Implements hook_menu().
  */
 function klaviyo_menu() {
   $items = array();
 
   $items['admin/config/services/klaviyo'] = array(
-    'title' => 'Klaivyo',
+    'title' => 'Klaivyo settings',
     'description' => 'Configure the Klaviyo API integration.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('klaviyo_api_integration_settings'),
@@ -468,8 +488,14 @@ function klaviyo_api_get_instance() {
 }
 
 /**
- * @todo: Write installation instructions.
+ * Retrieve the install instructions message.
+ *
+ * @return string
+ *   A translated string contiaining the installation instructions.
  */
 function klaviyo_get_installation_instructions() {
-  return t('Here are some instructions for installing the library.');
+  return t('The <a href="!api_project_page">Klaviyo API PHP Library</a> is not installed. For <a href="!drupal_project_page" target="_blank">installation instructions</a> please see the project page.', array(
+    '!api_project_page' => 'https://gollygood.github.io/klaviyo-api-php/',
+    '!drupal_project_page' => 'https://www.drupal.org/project/klaviyo#klaviyo-installation',
+  ));
 }
