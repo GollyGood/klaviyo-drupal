@@ -126,7 +126,6 @@ function klaviyo_user_delete($account) {
 function klaviyo_form_user_admin_settings_alter(&$form, $form_state) {
   $klaviyo = klaviyo_api_get_instance();
   if (empty($klaviyo)) {
-    drupal_set_message(klaviyo_get_installation_instructions(), 'warning');
     return;
   }
 
@@ -179,7 +178,6 @@ function klaviyo_form_user_admin_settings_alter_submit(&$form, $form_state) {
 function klaviyo_form_field_ui_field_edit_form_alter(&$form, $form_state, $form_id) {
   $klaviyo = klaviyo_api_get_instance();
   if (empty($klaviyo)) {
-    drupal_set_message(klaviyo_get_installation_instructions(), 'warning');
     return;
   }
 
