@@ -44,6 +44,29 @@ function klaviyo_menu() {
 }
 
 /**
+ * Checks to see if the Klaviyo Library is installed
+ *
+ * @return bool
+ *   Returns TRUE if the Klaviyo library is installed and FALSE otherwise.
+ */
+function klaviyo_library_is_installed() {
+  $library = libraries_detect('klaviyo-api-php');
+  if(empty($library) || $library['installed'] == FALSE) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Implements hook_form_form_id_alter().
+ */
+function klaviyo_form_system_modules_alter(&$form, &$form_state, $form_id) {
+  if(klaviyo_library_is_installed() == FALSE) {
+    drupal_set_message($message = klaviyo_get_installation_instructions(), $type = 'error');
+  }
+}
+
+/**
  * Implements hook_permission().
  */
 function klaviyo_permission() {

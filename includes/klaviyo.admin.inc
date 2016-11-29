@@ -13,11 +13,10 @@
 function klaviyo_api_integration_settings() {
   $form = array();
 
-  if (!libraries_detect('klaviyo-api-php')) {
-    drupal_set_message(klaviyo_get_installation_instructions(), 'warning');
+  if (klaviyo_library_is_installed() == FALSE) {
+    drupal_set_message($message = klaviyo_get_installation_instructions(), $type = 'error');
     return $form;
   }
-
   // Initialize an instance of Klaviyo. This will also initalized our site ID
   // for the first time if necessary.
   $klaviyo = klaviyo_api_get_instance();

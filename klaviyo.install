@@ -71,3 +71,35 @@ function klaviyo_uninstall() {
   variable_del('klaviyo_entity_settings_user');
   variable_del('klaviyo_person_attributes_user');
 }
+
+/**
+ * Implements hook_requirements().
+ */
+function klaviyo_requirements($phase) {
+  $requirements = array();
+
+  if ($phase == 'runtime' || $phase == 'update') {
+    if(klaviyo_library_is_installed() == FALSE) {
+      $requirements = _klaviyo_generate_error_requirements();
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Generates the error requirements for klaviyo_requirements().
+ */
+function _klaviyo_generate_error_requirements() {
+  $requirements = array();
+
+  $t = get_t();
+  $requirements['klaviyo_library'] = array(
+    'title' => $t('Klaviyo library required'),
+    'description' => klaviyo_get_installation_instructions(),
+    'severity' => REQUIREMENT_ERROR,
+    'value' => t('Missing')
+  );
+
+  return $requirements;
+}
