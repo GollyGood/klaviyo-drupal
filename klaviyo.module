@@ -32,7 +32,7 @@ function klaviyo_menu() {
   $items = array();
 
   $items['admin/config/services/klaviyo'] = array(
-    'title' => 'Klaivyo settings',
+    'title' => 'Klaviyo settings',
     'description' => 'Configure the Klaviyo API integration.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('klaviyo_api_integration_settings'),
