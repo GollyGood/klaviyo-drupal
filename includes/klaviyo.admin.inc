@@ -48,5 +48,39 @@ function klaviyo_api_integration_settings() {
     );
   }
 
+  $js_settings = variable_get('klaviyo_javascript', array('public_api_key' => '', 'roles' => array()));
+  $form['klaviyo_javascript'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Javascript API'),
+    '#description' => t('The JavaScript API adds automatic tracking of visited pages such as the "Active on site" metric. See <a href="!url">the Klaviyo jasvascript API documentation</a> for more information. Enter the public API key to enable the snippet.',
+      array('!url' => 'https://www.klaviyo.com/docs/getting-started')
+    ),
+    '#collapsible' => TRUE,
+    '#tree' => TRUE
+  );
+
+  $form['klaviyo_javascript']['public_api_key'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Public API key'),
+    '#description' => t('The javascript will not be added if the public key is missing. The public key can be retrieved from Account >> Settings >> <a href="!url">API Keys</a> from within Klaviyo.',
+      array('!url' => 'https://www.klaviyo.com/account#api-keys-tab')
+    ),
+    '#default_value' => $js_settings['public_api_key'],
+    '#size' => 60,
+    '#maxlength' => 128,
+    '#required' => FALSE,
+  );
+
+  // @todo: Add ability for black list vs white list.
+  $form['klaviyo_javascript']['roles'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Remove script for specific roles'),
+    '#default_value' => $js_settings['roles'],
+    '#options' => user_roles(),
+    '#description' => t('Remove script only for the selected role(s). If none of the roles are selected, all roles will have the script. Otherwise, any roles selected here will NOT have the script.'),
+  );
+
+  // @todo: Add ability to exclude on certain pages.
+
   return system_settings_form($form);
 }

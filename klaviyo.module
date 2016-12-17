@@ -520,3 +520,61 @@ function klaviyo_get_installation_instructions() {
     '!drupal_project_page' => 'https://www.drupal.org/project/klaviyo#klaviyo-installation',
   ));
 }
+
+/**
+ * Implementation of hook_page_alter().
+ */
+function klaviyo_page_alter(&$page) {
+  global $user;
+
+  $settings = variable_get('klaviyo_javascript', array());
+  if (!empty($settings['public_api_key']) && _klaviyo_js_should_add_js($user)) {
+    $page['content']['#attached']['js'][] = array(
+      'data' => drupal_get_path('module', 'klaviyo') . '/klaviyo.js',
+      'type'=>'file',
+      'weight' => 0,
+      'scope' => 'footer',
+    );
+
+    $identify = array();
+    if (!empty($user->mail)) {
+      $identify = array(
+        'identify' => array(
+          '$email' => $user->mail,
+          'drupal.site_id' => klaviyo_api_get_instance()->getSiteId(),
+        ),
+      );
+    }
+
+    $page['content']['#attached']['js'][] = array(
+      'data' => array(
+        'klaviyo' => array(
+          'public_api_key' => $settings['public_api_key']
+        ) + $identify,
+      ),
+      'type' => 'setting',
+    );
+  }
+}
+
+/**
+ * Determine if the JS tracking snippet should be added to a page.
+ *
+ * @param object $account
+ *   (optional) The user account to check, if not given use currently logged in user.
+ * @return boolean
+ *   Returns TRUE if the JS tracking snippt should be added to a page and FALSE
+ *   otherwise.
+ */
+function _klaviyo_js_should_add_js($account = NULL) {
+  if (is_null($account)) {
+    global $user;
+    $account = $user;
+  }
+
+  $js_settings = variable_get('klaviyo_javascript', array());
+  $roles = !empty($js_settings['roles']) ? $js_settings['roles'] : array();
+  $role_intersection = array_intersect_key($account->roles, array_flip($js_settings['roles']));
+
+  return empty($role_intersection);
+}

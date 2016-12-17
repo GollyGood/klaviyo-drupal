@@ -68,6 +68,7 @@ function klaviyo_schema() {
 function klaviyo_uninstall() {
   variable_del('klaviyo_api_key');
   variable_del('klaviyo_drupal_site_id');
+  variable_del('klaviyo_javascript');
   variable_del('klaviyo_entity_settings_user');
   variable_del('klaviyo_person_attributes_user');
 }
