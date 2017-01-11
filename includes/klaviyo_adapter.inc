@@ -156,4 +156,18 @@ class KlaviyoAdapter {
     return $successful;
   }
 
+  /**
+   * Check if the specified attribute is a person custom attribute.
+   *
+   * @param string $attribute_key
+   *   The attribute key for which to check is a custom attribute.
+   *
+   * @return bool
+   *    Returns TRUE if the specified attribute is a custom attribute and FALSE
+   *    otherwise.
+   */
+  public function personAttributeIsCustom($attribute_key) {
+    return call_user_func("{$this->klaviyo->getModelClass('person')}::isCustomAttributeKey", $attribute_key);
+  }
+
 }

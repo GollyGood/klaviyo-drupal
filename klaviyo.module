@@ -234,11 +234,19 @@ function klaviyo_form_field_ui_field_edit_form_alter(&$form, $form_state, $form_
  * Validation handler for the field_ui_field_edit form.
  */
 function klaviyo_form_field_ui_field_edit_form_validate(&$form, &$form_state) {
+  $klaviyo = klaviyo_api_get_instance();
   $values = $form_state['values'];
 
   if (!empty($values['klaviyo']['person_attribute']) && $attribute_key = $values['klaviyo']['person_attribute']) {
-    // @todo: Check that it is not already used.
-    // @todo: Check that it is a clean string < 125 chars (or max variable size?).
+    if($klaviyo->api->personAttributeIsCustom($attribute_key) && !preg_match('/^[A-Za-z0-9_]+$/', $attribute_key)) {
+      form_set_error('klaviyo][person_attribute', t('Special characters are not allowed for custom Klaviyo attributes.'));
+    }
+    if(strlen($attribute_key) >= 125) {
+      form_set_error('klaviyo][person_attribute', t('Custom Klaviyo attributes must not be longer than 124 characters.'));
+    }
+    if(_klaviyo_field_person_is_already_mapped('user', $form['#field']['field_name'], $attribute_key)) {
+      form_set_error('klaviyo][person_attribute', t('The custom Klaviyo attribute name entered below @attribute_key is already in use. Please choose a unique name.', array('@attribute_key' => $attribute_key)));
+    }
   }
 }
 
@@ -257,6 +265,42 @@ function klaviyo_form_field_ui_field_edit_form_submit(&$form, &$form_state) {
       $attributes[$form['#field']['field_name']] = $attribute_key;
     }
     variable_set('klaviyo_person_attributes_user', $attributes);
+  }
+}
+
+/**
+ * Check if the attribute key is mapped for the entity type and field name.
+ *
+ * @param string $entity_type
+ *    The entity_type for which to check the mapped attribute keys.
+ * @param string $field_name
+ *    The field name for which to check the specified attribute key.
+ * @param string $attribute_key
+ *    The attribute key for which to check is already mapped.
+ *
+ * @return bool
+ *   Returns TRUE if the attribute key is mapped for the specified entity_type
+ *   and field_name.
+ */
+function _klaviyo_field_person_is_already_mapped($entity_type, $field_name, $attribute_key) {
+  $already_mapped = FALSE;
+  $attributes = variable_get("klaviyo_person_attributes_{$entity_type}", array());
+
+  $field_is_not_mapped = (empty($attributes[$field_name]));
+  $field_is_not_mapped_to_current_attribute = ($field_is_not_mapped || (!$field_is_not_mapped && $attributes[$field_name] !== $attribute_key));
+
+  return ($field_is_not_mapped || $field_is_not_mapped_to_current_attribute) ? in_array($attribute_key, $attributes) : FALSE;
+}
+
+/**
+ * Implements hook_field_delete_instance().
+ */
+function klaviyo_field_delete_instance($instance) {
+  $attributes = variable_get('klaviyo_person_attributes_' . $instance['entity_type'], array());
+
+  if (isset($attributes[$instance['field_name']])) {
+    unset($attributes[$instance['field_name']]);
+    variable_set('klaviyo_person_attributes_' . $instance['entity_type'], $attributes);
   }
 }
 
